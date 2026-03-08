@@ -23,12 +23,13 @@ function openWorkTimeContextMenu(ev, mId, dayIdx) {
     ev.stopPropagation();
     const menu = document.getElementById('worktimeMenu');
     const key = getWorkHoursKey(mId, dayIdx);
-    const current = state.workHours[key] || { from:'', to:'', breakMin:0, hours:0 };
+    const current = state.workHours[key] || { from:'', to:'', breakMin:0, hours:0, note:'' };
 
     workTimeContext = { mId, dayIdx };
     document.getElementById('wtFrom').value = current.from || '';
     document.getElementById('wtTo').value = current.to || '';
     document.getElementById('wtBreak').value = current.breakMin || 0;
+    document.getElementById('wtNote').value = current.note || ''; 
 
     menu.style.display = 'block';
     menu.style.left = Math.min(window.innerWidth - 280, ev.clientX) + 'px';
@@ -44,11 +45,12 @@ function saveWorkTimeFromMenu() {
     const from = document.getElementById('wtFrom').value;
     const to = document.getElementById('wtTo').value;
     const breakMin = parseInt(document.getElementById('wtBreak').value || 0, 10);
+    const note = document.getElementById('wtNote').value || '';
     const hours = calcHoursFromRange(from, to, breakMin);
     if(hours === null) return alert('Bitte gültige Von/Bis-Zeit eingeben (Bis muss nach Von liegen).');
 
     const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
-    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours };
+    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours, note };
     saveState();
     closeWorkTimeContextMenu();
     render();
@@ -76,8 +78,9 @@ function renderWorkHoursForMonteur(mId, rowEl) {
         const from = rec.from || '--:--';
         const to = rec.to || '--:--';
         const pause = rec.breakMin || 0;
+        const note = rec.note || '';
         chip.textContent = `${hours}h`;
-        chip.title = `${from}-${to} | Pause ${pause}m`;
+        chip.title = `${from}-${to} | Pause ${pause}m${note ? ' | ' + note : ''}`;
         chip.onclick = ev => { ev.stopPropagation(); openWorkTimeContextMenu(ev, mId, dayIdx); };
         chip.oncontextmenu = ev => openWorkTimeContextMenu(ev, mId, dayIdx);
         rowEl.appendChild(chip);

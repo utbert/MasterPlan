@@ -62,19 +62,87 @@ function renderTasksAdmin() {
 
 function renderTimeAdmin() {
     const el = document.getElementById('time-admin-list');
-    if(!el) return;
+    const summaryEl = document.getElementById('time-admin-summary');
+    const monthFilterEl = document.getElementById('time-month-filter');
+    if(!el || !summaryEl) return;
+
+    const monthFilter = monthFilterEl ? monthFilterEl.value : 'all';
     const rows = Object.entries(state.workHours).map(([key, rec]) => {
         const [year,mId,dayIdx] = key.split('-');
+        const yyyy = parseInt(year);
+        const day = new Date(yyyy,0,1); day.setDate(day.getDate()+parseInt(dayIdx));
+        if(yyyy !== currentYear) return null;
+        if(monthFilter !== 'all' && (day.getMonth()+1) !== parseInt(monthFilter,10)) return null;
+
         const m = getMonteur(mId);
-        const day = new Date(parseInt(year),0,1); day.setDate(day.getDate()+parseInt(dayIdx));
         const from = rec.from || '--:--';
         const to = rec.to || '--:--';
         const pause = rec.breakMin || 0;
         const hours = rec.hours || 0;
-        return { year:parseInt(year), name:m?m.name:mId, date:day.toLocaleDateString('de-DE'), from, to, pause, hours };
-    }).sort((a,b)=> a.year!==b.year ? b.year-a.year : a.date.localeCompare(b.date));
+        const note = rec.note || '';
+        const overtime = Math.round((hours - 8) * 100) / 100;
+        return { year:yyyy, name:m?m.name:mId, dateObj:day, date:day.toLocaleDateString('de-DE'), from, to, pause, hours, overtime, note };
+    }).filter(Boolean).sort((a,b)=> a.dateObj - b.dateObj || a.name.localeCompare(b.name));
 
-    el.innerHTML = `<table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Von</th><th>Bis</th><th>Pause</th><th>Stunden</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.date}</td><td>${r.from}</td><td>${r.to}</td><td>${r.pause}m</td><td>${r.hours}h</td></tr>`).join('')}</tbody></table>`;
+    const totalsByEmployee = {};
+    rows.forEach(r => {
+        if(!totalsByEmployee[r.name]) totalsByEmployee[r.name] = { days:0, hours:0, overtime:0 };
+        totalsByEmployee[r.name].days += 1;
+        totalsByEmployee[r.name].hours += r.hours;
+        totalsByEmployee[r.name].overtime += r.overtime;
+    });
+
+    const totalHours = rows.reduce((a,b)=>a+b.hours,0);
+    const totalOvertime = rows.reduce((a,b)=>a+b.overtime,0);
+    const avgHours = rows.length ? Math.round((totalHours/rows.length)*100)/100 : 0;
+
+    summaryEl.innerHTML = `
+      <div class="kpi-row">
+        <div class="kpi"><strong>Einträge:</strong> ${rows.length}</div>
+        <div class="kpi"><strong>Gesamtstunden:</strong> ${Math.round(totalHours*100)/100}h</div>
+        <div class="kpi"><strong>Ø pro Tag:</strong> ${avgHours}h</div>
+        <div class="kpi"><strong>Überstunden gesamt:</strong> ${Math.round(totalOvertime*100)/100}h</div>
+      </div>
+      <table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Tage</th><th>Stunden</th><th>Überstunden</th></tr></thead><tbody>
+      ${Object.entries(totalsByEmployee).map(([name,t])=>`<tr><td>${name}</td><td>${t.days}</td><td>${Math.round(t.hours*100)/100}h</td><td>${Math.round(t.overtime*100)/100}h</td></tr>`).join('')}
+      </tbody></table>
+    `;
+
+    el.innerHTML = `<table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Von</th><th>Bis</th><th>Pause</th><th>Ist</th><th>Überstunden</th><th>Notiz</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.date}</td><td>${r.from}</td><td>${r.to}</td><td>${r.pause}m</td><td>${r.hours}h</td><td>${r.overtime}h</td><td>${r.note}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function exportTimeCsv() {
+    const monthFilterEl = document.getElementById('time-month-filter');
+    const monthFilter = monthFilterEl ? monthFilterEl.value : 'all';
+    const rows = Object.entries(state.workHours).map(([key, rec]) => {
+        const [year,mId,dayIdx] = key.split('-');
+        const yyyy = parseInt(year);
+        const day = new Date(yyyy,0,1); day.setDate(day.getDate()+parseInt(dayIdx));
+        if(yyyy !== currentYear) return null;
+        if(monthFilter !== 'all' && (day.getMonth()+1) !== parseInt(monthFilter,10)) return null;
+        const m = getMonteur(mId);
+        return {
+            mitarbeiter: m ? m.name : mId,
+            datum: day.toLocaleDateString('de-DE'),
+            von: rec.from || '',
+            bis: rec.to || '',
+            pauseMin: rec.breakMin || 0,
+            stunden: rec.hours || 0,
+            notiz: (rec.note || '').replace(/"/g, '""')
+        };
+    }).filter(Boolean);
+
+    const header = ['Mitarbeiter','Datum','Von','Bis','PauseMin','Stunden','Notiz'];
+    const lines = [header.join(';')].concat(rows.map(r => `${r.mitarbeiter};${r.datum};${r.von};${r.bis};${r.pauseMin};${r.stunden};"${r.notiz}"`));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zeiterfassung-${currentYear}-${monthFilter==='all'?'all':monthFilter}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function refreshStateJson() {
