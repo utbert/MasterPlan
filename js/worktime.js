@@ -19,6 +19,25 @@ function calcHoursFromRange(from, to, breakMin) {
 }
 
 
+
+function getMonteurTimePreset(mId) {
+    const m = getMonteur(mId);
+    return {
+        from: (m && m.workStart) ? m.workStart : '07:00',
+        to: (m && m.workEnd) ? m.workEnd : '15:30',
+        breakMin: (m && m.defaultBreak !== undefined) ? parseInt(m.defaultBreak,10) : 30
+    };
+}
+
+function shiftTimeMinutes(timeStr, deltaMinutes) {
+    const minutes = toMinutes(timeStr);
+    if(minutes === null) return timeStr;
+    const shifted = Math.max(0, Math.min(23*60+59, minutes + deltaMinutes));
+    const h = String(Math.floor(shifted/60)).padStart(2,'0');
+    const m = String(shifted%60).padStart(2,'0');
+    return `${h}:${m}`;
+}
+
 function getPreviousWorkRecord(mId, dayIdx) {
     for(let d=dayIdx-1; d>=0; d--) {
         const prev = state.workHours[getWorkHoursKey(mId, d)];
@@ -28,14 +47,15 @@ function getPreviousWorkRecord(mId, dayIdx) {
 }
 
 function applyWorktimePreset(type) {
+    const preset = getMonteurTimePreset(workTimeContext.mId);
     if(type === 'full') {
-        document.getElementById('wtFrom').value = '07:00';
-        document.getElementById('wtTo').value = '15:30';
-        document.getElementById('wtBreak').value = 30;
+        document.getElementById('wtFrom').value = preset.from;
+        document.getElementById('wtTo').value = preset.to;
+        document.getElementById('wtBreak').value = preset.breakMin;
     } else if(type === 'short') {
-        document.getElementById('wtFrom').value = '07:00';
-        document.getElementById('wtTo').value = '15:00';
-        document.getElementById('wtBreak').value = 30;
+        document.getElementById('wtFrom').value = preset.from;
+        document.getElementById('wtTo').value = shiftTimeMinutes(preset.to, -30);
+        document.getElementById('wtBreak').value = preset.breakMin;
     } else if(type === 'off') {
         document.getElementById('wtFrom').value = '';
         document.getElementById('wtTo').value = '';
@@ -50,7 +70,10 @@ function openWorkTimeContextMenu(ev, mId, dayIdx) {
     const menu = document.getElementById('worktimeMenu');
     const key = getWorkHoursKey(mId, dayIdx);
     let current = state.workHours[key] || null;
-    if(!current) current = getPreviousWorkRecord(mId, dayIdx) || { from:'', to:'', breakMin:0, hours:0, note:'' };
+    if(!current) {
+        const model = getMonteurTimePreset(mId);
+        current = getPreviousWorkRecord(mId, dayIdx) || { from:model.from, to:model.to, breakMin:model.breakMin, hours:0, note:'' };
+    }
 
     workTimeContext = { mId, dayIdx };
     document.getElementById('wtFrom').value = current.from || '';

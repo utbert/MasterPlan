@@ -244,6 +244,15 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
         <div id="monteurFields" style="display:none;">
             <label>Urlaubstage pro Jahr</label>
             <input type="number" id="fieldVacation" min="0" placeholder="z.B. 30">
+
+            <label>Arbeitszeitmodell (Von)</label>
+            <input type="time" id="fieldWorkStart" step="900">
+
+            <label>Arbeitszeitmodell (Bis)</label>
+            <input type="time" id="fieldWorkEnd" step="900">
+
+            <label>Standard-Pause (Minuten)</label>
+            <input type="number" id="fieldDefaultBreak" min="0" step="5" placeholder="z.B. 30">
             
             <label>Eingestellt von</label>
             <input type="date" id="fieldEmpStart">
@@ -301,7 +310,7 @@ let workTimeContext = { mId: null, dayIdx: null };
 let timeEntryMode = false;
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
-    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
+    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart: '', empEnd: ''}]}],
     resourceGroups:[{id:'rg1',name:'Geräte Hof',collapsed:false}],
     resources: [{id:'r1', groupId:'rg1', name:'Minibagger 1.5t', rentedTo:''}],
     einsaetze:[],
@@ -319,6 +328,11 @@ function normalizeState() {
         if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
         if(e.isVacation !== undefined) delete e.isVacation;
     });
+    state.groups.forEach(g => g.monteure.forEach(m => {
+        if(!m.workStart) m.workStart = '07:00';
+        if(!m.workEnd) m.workEnd = '15:30';
+        if(m.defaultBreak === undefined || m.defaultBreak === null) m.defaultBreak = 30;
+    }));
     Object.keys(state.workHours).forEach(key => {
         const val = state.workHours[key];
         if(typeof val === 'number') state.workHours[key] = { from: '', to: '', breakMin: 0, hours: val, note:'' };
@@ -980,6 +994,9 @@ function openEditModal(type, item, gId = null) {
         };
     } else if(type==='monteur'){
         document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
+        document.getElementById('fieldWorkStart').value = item.workStart || '07:00';
+        document.getElementById('fieldWorkEnd').value = item.workEnd || '15:30';
+        document.getElementById('fieldDefaultBreak').value = item.defaultBreak !== undefined ? item.defaultBreak : 30;
         document.getElementById('fieldEmpStart').value = item.empStart || '';
         document.getElementById('fieldEmpEnd').value = item.empEnd || '';
     } else if(type==='resource') {
@@ -1026,6 +1043,9 @@ function saveModal() {
         const m = state.groups.find(x=>x.id===editContext.gId).monteure.find(x=>x.id===editContext.id);
         m.name=val; 
         m.vacationDays = parseInt(document.getElementById('fieldVacation').value) || 0;
+        m.workStart = document.getElementById('fieldWorkStart').value || '07:00';
+        m.workEnd = document.getElementById('fieldWorkEnd').value || '15:30';
+        m.defaultBreak = parseInt(document.getElementById('fieldDefaultBreak').value) || 0;
         m.empStart = document.getElementById('fieldEmpStart').value;
         m.empEnd = document.getElementById('fieldEmpEnd').value;
     }
@@ -1074,7 +1094,7 @@ function toggleTimeEntryMode(){
 }
 
 function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }
-function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, empStart:'', empEnd:''}); saveState(); render(); } }
+function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart:'', empEnd:''}); saveState(); render(); } }
 function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
 function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
