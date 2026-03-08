@@ -22,6 +22,8 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
 .year-nav { display: flex; align-items: center; gap: 5px; background: #f1f3f4; padding: 4px; border-radius: 6px; }
 .year-display { font-weight: bold; padding: 0 10px; min-width: 45px; text-align: center; font-size: 14px; }
+.toolbar input[type="search"], .toolbar select { padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; }
+.toolbar input[type="search"]{ min-width:220px; }
 
 .app-container{ display:flex; flex-grow:1; overflow:hidden; }
 
@@ -82,6 +84,13 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     <button class="btn" onclick="scrollToToday()">Heute</button>
     <button class="btn btn-primary" onclick="addTeam()">+ Team</button>
     <button class="btn btn-warning" onclick="addResource()">+ Gerät</button>
+    <input type="search" id="search-input" placeholder="Suche: Team, Mitarbeiter, Gerät, Einsatz..." oninput="render()">
+    <select id="status-filter" onchange="render()">
+        <option value="all">Alle Einträge</option>
+        <option value="normal">Normale Einsätze</option>
+        <option value="vacation">Nur Urlaub</option>
+        <option value="rented">Nur verliehen</option>
+    </select>
     <button class="btn" onclick="zoom(1.2)">🔍 +</button>
     <button class="btn" onclick="zoom(0.8)">🔍 -</button>
     <div style="flex-grow:1;"></div>
@@ -218,6 +227,43 @@ function isPlacementValid(mId, startIdx, durationIdx) {
     return { valid: true };
 }
 
+function hasOverlap(mId, startIdx, durationIdx, excludeId = null) {
+    const endIdx = startIdx + durationIdx - 1;
+    const conflict = state.einsaetze.find(e => {
+        if(e.year !== currentYear || e.mId !== mId || e.id === excludeId) return false;
+        const eStart = parseInt(e.start);
+        const eEnd = eStart + parseInt(e.duration) - 1;
+        return !(endIdx < eStart || startIdx > eEnd);
+    });
+    if(conflict) {
+        return { valid: false, msg: `Doppelbelegung erkannt: "${conflict.title}" belegt diesen Zeitraum bereits.` };
+    }
+    return { valid: true };
+}
+
+function validatePlacement(mId, startIdx, durationIdx, excludeId = null) {
+    const baseCheck = isPlacementValid(mId, startIdx, durationIdx);
+    if(!baseCheck.valid) return baseCheck;
+    return hasOverlap(mId, startIdx, durationIdx, excludeId);
+}
+
+function matchesSearch(entityText, searchTerm) {
+    if(!searchTerm) return true;
+    return entityText.toLowerCase().includes(searchTerm);
+}
+
+function matchesOptionalSearch(entityText, searchTerm) {
+    if(!searchTerm) return false;
+    return entityText.toLowerCase().includes(searchTerm);
+}
+
+function matchesStatusFilter(entry, statusFilter) {
+    if(statusFilter === 'vacation') return !!entry.isVacation;
+    if(statusFilter === 'rented') return !!entry.isRented;
+    if(statusFilter === 'normal') return !entry.isVacation && !entry.isRented;
+    return true;
+}
+
 function checkVacationLimit(mId, eId, requestedDuration) {
     let m = getMonteur(mId);
     if(!m) return {valid: true}; // Machines don't have vacation
@@ -282,9 +328,21 @@ function render(){
     sidebar.innerHTML=''; grid.innerHTML='';
     let currentY=0;
     activeRowOffsets = [];
+    const searchTerm = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+    const statusFilter = document.getElementById('status-filter')?.value || 'all';
 
     // Personal Rendern
     state.groups.forEach(g=>{
+        const visibleMonteurs = g.monteure.filter(m => {
+            const monteurTasks = state.einsaetze.filter(e => e.mId === m.id && e.year === currentYear);
+            const hasMatchingTask = monteurTasks.some(e => matchesSearch(`${e.title} ${m.name} ${g.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+            const nameMatch = matchesOptionalSearch(`${m.name} ${g.name}`, searchTerm);
+            const noFilterActive = statusFilter === 'all' && searchTerm === '';
+            return noFilterActive || nameMatch || hasMatchingTask;
+        });
+
+        if(visibleMonteurs.length === 0 && (searchTerm || statusFilter !== 'all')) return;
+
         const gSide=document.createElement('div');
         gSide.className='row-group sidebar-item';
         gSide.innerHTML=`<span>${g.collapsed?'▶':'▼'} ${g.name}</span><div style="display:flex"><span class="action-btn" onclick="addMonteur(event,'${g.id}')">+</span></div>`;
@@ -314,7 +372,7 @@ function render(){
         currentY+=38;
 
         if(!g.collapsed){
-            g.monteure.forEach(m=>{
+            visibleMonteurs.forEach(m=>{
                 const mSide=document.createElement('div');
                 mSide.className='sidebar-monteur sidebar-item';
                 mSide.innerHTML=`<span style="width:100%">${m.name}</span>`;
@@ -347,14 +405,22 @@ function render(){
                     mGrid.appendChild(ooo);
                 }
 
-                renderTasksForId(m.id, mGrid, grid, currentY);
+                renderTasksForId(m.id, mGrid, grid, currentY, searchTerm, statusFilter);
                 currentY+=50;
             });
         }
     });
 
     // Maschinen & Geräte Rendern
-    if(state.resources.length > 0) {
+    const visibleResources = state.resources.filter(res => {
+        const resourceTasks = state.einsaetze.filter(e => e.mId === res.id && e.year === currentYear);
+        const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${e.title} ${res.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+        const nameMatch = matchesOptionalSearch(res.name, searchTerm);
+        const noFilterActive = statusFilter === 'all' && searchTerm === '';
+        return noFilterActive || nameMatch || hasMatchingTask;
+    });
+
+    if(visibleResources.length > 0) {
         const resSide = document.createElement('div');
         resSide.className = 'row-group sidebar-item';
         resSide.style.backgroundColor = '#fff3e0';
@@ -366,7 +432,7 @@ function render(){
         grid.appendChild(resGrid);
         currentY += 38;
 
-        state.resources.forEach(res => {
+        visibleResources.forEach(res => {
             const rSide = document.createElement('div');
             rSide.className = 'sidebar-monteur sidebar-item';
             rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
@@ -380,7 +446,7 @@ function render(){
             grid.appendChild(rGrid);
             activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
 
-            renderTasksForId(res.id, rGrid, grid, currentY);
+            renderTasksForId(res.id, rGrid, grid, currentY, searchTerm, statusFilter);
             currentY += 50;
         });
     }
@@ -389,8 +455,10 @@ function render(){
     document.getElementById('zoom-info').innerText=`Zoom: ${Math.round(dayWidth)}px`;
 }
 
-function renderTasksForId(mId, rowEl, grid, yPos) {
-    state.einsaetze.filter(e => e.mId === mId && e.year === currentYear).forEach(e => {
+function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
+    state.einsaetze.filter(e => e.mId === mId && e.year === currentYear)
+    .filter(e => matchesStatusFilter(e, statusFilter) && matchesSearch(`${e.title}`, searchTerm))
+    .forEach(e => {
         const bar=document.createElement('div');
         bar.className='bar' + (e.isVacation ? ' is-vacation' : '') + (e.isRented ? ' is-rented' : '');
         bar.style.left=(e.start*dayWidth + 1)+'px';
@@ -437,7 +505,7 @@ function initMove(ev, item, bar) {
         const targetRow = activeRowOffsets.find(r => centerY >= r.top && centerY <= r.bottom);
         if(targetRow) newMId = targetRow.mId;
 
-        let pCheck = isPlacementValid(newMId, newStart, item.duration);
+        let pCheck = validatePlacement(newMId, newStart, item.duration, e.ctrlKey ? null : item.id);
         if(!pCheck.valid) { alert(pCheck.msg); render(); return; }
 
         // Sanitize visual flags when jumping between Humans and Machines
@@ -456,7 +524,7 @@ function initResize(ev,item,bar){
     const move=e=>{ item.duration=Math.max(1,startD+Math.round((e.clientX-startX)/dayWidth)); bar.style.width=(item.duration*dayWidth-2)+'px'; };
     const up=()=>{ 
         window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); 
-        let pCheck = isPlacementValid(item.mId, item.start, item.duration);
+        let pCheck = validatePlacement(item.mId, item.start, item.duration, item.id);
         if(!pCheck.valid) { alert(pCheck.msg); item.duration = startD; }
         else if(item.isVacation) {
             let vCheck = checkVacationLimit(item.mId, item.id, item.duration);
@@ -529,7 +597,7 @@ function saveModal() {
         const isVac = document.getElementById('fieldIsVacation').checked;
         const isRented = document.getElementById('fieldIsRentedTimeline').checked;
         
-        let pCheck = isPlacementValid(e.mId, e.start, dur);
+        let pCheck = validatePlacement(e.mId, e.start, dur, e.id);
         if(!pCheck.valid) return alert(pCheck.msg);
         
         if(isVac) {
@@ -568,7 +636,7 @@ function gridClick(ev,mId){
     const rect=ev.currentTarget.getBoundingClientRect(); 
     const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
     
-    let pCheck = isPlacementValid(mId, start, 1);
+    let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
 
     const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false }; 
