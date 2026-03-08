@@ -136,10 +136,6 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <label id="wrapVacation" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer;">
                 <input type="checkbox" id="fieldIsVacation" style="width:auto; margin:0;"> Ist Urlaub?
             </label>
-            <label id="wrapRented" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer; margin-top:5px;">
-                <input type="checkbox" id="fieldIsRentedTimeline" style="width:auto; margin:0;"> Extern verliehen?
-            </label>
-
             <div id="wrapLinkedTask" style="display:none; margin-top:10px; flex-direction:column;">
                 <label>Mitarbeiter-Aufgabe zuordnen</label>
                 <select id="fieldLinkedTask"></select>
@@ -269,6 +265,35 @@ function getLinkableTasksForResourceEinsatz(item) {
     return state.einsaetze.filter(e => e.year === currentYear && getMonteur(e.mId) !== null && rangesOverlap(item.start, item.duration, e.start, e.duration));
 }
 
+function applyLinkedTaskToResourceItem(item, linkedTaskId) {
+    const linked = getEinsatzById(linkedTaskId);
+    if(!linked || !getMonteur(linked.mId) || !getResource(item.mId)) return false;
+
+    const oldStart = item.start;
+    const oldDuration = item.duration;
+    const oldTitle = item.title;
+    const oldColor = item.color;
+
+    item.start = linked.start;
+    item.duration = linked.duration;
+    item.title = linked.title;
+    item.color = linked.color || item.color || '#4285f4';
+    item.linkedTaskId = linked.id;
+    item.isVacation = false;
+    item.isRented = false;
+
+    const check = validatePlacement(item.mId, item.start, item.duration, item.id);
+    if(!check.valid) {
+        item.start = oldStart;
+        item.duration = oldDuration;
+        item.title = oldTitle;
+        item.color = oldColor;
+        item.linkedTaskId = null;
+        return false;
+    }
+    return true;
+}
+
 function getEinsatzById(eId) {
     return state.einsaetze.find(e => e.id === eId) || null;
 }
@@ -287,7 +312,10 @@ function sanitizeLinkedTask(item) {
     const linked = getEinsatzById(item.linkedTaskId);
     if(!linked || linked.year !== currentYear || !getMonteur(linked.mId) || !rangesOverlap(item.start, item.duration, linked.start, linked.duration)) {
         item.linkedTaskId = null;
+        return;
     }
+    item.title = linked.title;
+    item.color = linked.color || item.color || '#4285f4';
 }
 
 function getTaskSearchBlob(entry) {
@@ -607,12 +635,50 @@ function initMove(ev, item, bar) {
         let pCheck = validatePlacement(newMId, newStart, item.duration, e.ctrlKey ? null : item.id);
         if(!pCheck.valid) { alert(pCheck.msg); render(); return; }
 
-        // Sanitize visual flags when jumping between Humans and Machines
-        let isHuman = getMonteur(newMId) !== null;
-        if(isHuman) item.isRented = false; else item.isVacation = false;
+        const sourceIsHuman = getMonteur(originalMId) !== null;
+        const sourceIsResource = getResource(originalMId) !== null;
+        const targetIsHuman = getMonteur(newMId) !== null;
+        const targetIsResource = getResource(newMId) !== null;
 
-        if (e.ctrlKey) { const clonedItem = { ...item, id: 'e' + Date.now(), start: newStart, mId: newMId }; sanitizeLinkedTask(clonedItem); state.einsaetze.push(clonedItem); } 
-        else { item.start = newStart; item.mId = newMId; sanitizeLinkedTask(item); }
+        if(e.ctrlKey && sourceIsHuman && targetIsResource) {
+            const clonedItem = {
+                id: 'e' + Date.now(),
+                mId: newMId,
+                year: currentYear,
+                title: item.title,
+                start: item.start,
+                duration: item.duration,
+                color: item.color || '#4285f4',
+                isVacation: false,
+                isRented: false,
+                linkedTaskId: item.id
+            };
+            if(!applyLinkedTaskToResourceItem(clonedItem, item.id)) { alert('Verknüpfung fehlgeschlagen: Zielressource ist in dem Zeitraum belegt.'); render(); return; }
+            state.einsaetze.push(clonedItem);
+            saveState(); render();
+            return;
+        }
+
+        if(!e.ctrlKey && sourceIsResource && targetIsHuman) {
+            const linked = state.einsaetze.find(x => x.id !== item.id && x.mId === newMId && x.year === currentYear && rangesOverlap(newStart, item.duration, x.start, x.duration));
+            if(!linked) { alert('Keine passende Mitarbeiter-Aufgabe unter dem Mausziel gefunden.'); render(); return; }
+            if(!applyLinkedTaskToResourceItem(item, linked.id)) { alert('Verknüpfung fehlgeschlagen: Zielressource ist in dem Zeitraum belegt.'); render(); return; }
+            saveState(); render();
+            return;
+        }
+
+        // Sanitize visual flags when jumping between Humans and Machines
+        if(targetIsHuman) item.isRented = false; else item.isVacation = false;
+
+        if (e.ctrlKey) {
+            const clonedItem = { ...item, id: 'e' + Date.now(), start: newStart, mId: newMId, linkedTaskId: null };
+            sanitizeLinkedTask(clonedItem);
+            state.einsaetze.push(clonedItem);
+        } else {
+            item.start = newStart;
+            item.mId = newMId;
+            sanitizeLinkedTask(item);
+        }
         saveState(); render(); 
     };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -676,7 +742,6 @@ function openEditModal(type, item, gId = null) {
         let isHuman = getMonteur(item.mId) !== null;
         const isResource = getResource(item.mId) !== null;
         document.getElementById('wrapVacation').style.display = isHuman ? 'flex' : 'none';
-        document.getElementById('wrapRented').style.display = isHuman ? 'none' : 'flex';
         document.getElementById('wrapLinkedTask').style.display = isResource ? 'flex' : 'none';
 
         const linkedSelect = document.getElementById('fieldLinkedTask');
@@ -692,8 +757,20 @@ function openEditModal(type, item, gId = null) {
         }
 
         document.getElementById('fieldIsVacation').checked = item.isVacation || false;
-        document.getElementById('fieldIsRentedTimeline').checked = item.isRented || false;
         linkedSelect.value = item.linkedTaskId || '';
+        linkedSelect.onchange = () => {
+            const selectedId = linkedSelect.value || null;
+            if(!selectedId) return;
+            const preview = { ...item, mId: item.mId, id: item.id };
+            if(!applyLinkedTaskToResourceItem(preview, selectedId)) {
+                alert('Verknüpfung nicht möglich: Ressource ist in dem Zeitraum bereits belegt.');
+                linkedSelect.value = item.linkedTaskId || '';
+                return;
+            }
+            document.getElementById('fieldTitle').value = preview.title;
+            document.getElementById('fieldColor').value = preview.color || '#4285f4';
+            document.getElementById('fieldDuration').value = preview.duration;
+        };
     } else if(type==='monteur'){
         document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
         document.getElementById('fieldEmpStart').value = item.empStart || '';
@@ -713,7 +790,6 @@ function saveModal() {
         const e = state.einsaetze.find(x=>x.id===editContext.id);
         const dur = parseInt(document.getElementById('fieldDuration').value) || 1;
         const isVac = document.getElementById('fieldIsVacation').checked;
-        const isRented = document.getElementById('fieldIsRentedTimeline').checked;
         
         let pCheck = validatePlacement(e.mId, e.start, dur, e.id);
         if(!pCheck.valid) return alert(pCheck.msg);
@@ -724,8 +800,12 @@ function saveModal() {
         }
 
         const linkedTaskId = document.getElementById('fieldLinkedTask').value || null;
-        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=isRented;
-        e.linkedTaskId = getResource(e.mId) ? linkedTaskId : null;
+        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=false;
+        if(getResource(e.mId) && linkedTaskId) {
+            if(!applyLinkedTaskToResourceItem(e, linkedTaskId)) return alert('Verknüpfung nicht möglich: Ressource ist in dem Zeitraum bereits belegt.');
+        } else {
+            e.linkedTaskId = null;
+        }
         sanitizeLinkedTask(e);
     } else if(editContext.type==='group'){
         state.groups.find(x=>x.id===editContext.id).name=val;
