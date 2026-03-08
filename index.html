@@ -266,6 +266,8 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     </div>
 </div>
 
+<script src="js/worktime.js"></script>
+<script src="js/adminViews.js"></script>
 <script>
 let currentYear = 2026;
 let dayWidth = 100;
@@ -460,91 +462,6 @@ function getTaskSearchBlob(entry) {
 }
 
 
-function getWorkHoursKey(mId, dayIdx) {
-    return `${currentYear}-${mId}-${dayIdx}`;
-}
-
-function toMinutes(timeStr) {
-    if(!timeStr || !timeStr.includes(':')) return null;
-    const [h,m] = timeStr.split(':').map(x => parseInt(x,10));
-    if(Number.isNaN(h) || Number.isNaN(m)) return null;
-    return h*60+m;
-}
-
-function calcHoursFromRange(from, to, breakMin) {
-    const fromMin = toMinutes(from);
-    const toMin = toMinutes(to);
-    if(fromMin === null || toMin === null || toMin <= fromMin) return null;
-    const pause = Math.max(0, parseInt(breakMin || 0, 10));
-    const worked = Math.max(0, toMin - fromMin - pause);
-    return Math.round((worked / 60) * 100) / 100;
-}
-
-function openWorkTimeContextMenu(ev, mId, dayIdx) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    const menu = document.getElementById('worktimeMenu');
-    const key = getWorkHoursKey(mId, dayIdx);
-    const current = state.workHours[key] || { from:'', to:'', breakMin:0, hours:0 };
-
-    workTimeContext = { mId, dayIdx };
-    document.getElementById('wtFrom').value = current.from || '';
-    document.getElementById('wtTo').value = current.to || '';
-    document.getElementById('wtBreak').value = current.breakMin || 0;
-
-    menu.style.display = 'block';
-    menu.style.left = Math.min(window.innerWidth - 280, ev.clientX) + 'px';
-    menu.style.top = Math.min(window.innerHeight - 240, ev.clientY) + 'px';
-}
-
-function closeWorkTimeContextMenu() {
-    document.getElementById('worktimeMenu').style.display = 'none';
-}
-
-function saveWorkTimeFromMenu() {
-    if(workTimeContext.mId === null) return;
-    const from = document.getElementById('wtFrom').value;
-    const to = document.getElementById('wtTo').value;
-    const breakMin = parseInt(document.getElementById('wtBreak').value || 0, 10);
-    const hours = calcHoursFromRange(from, to, breakMin);
-    if(hours === null) return alert('Bitte gültige Von/Bis-Zeit eingeben (Bis muss nach Von liegen).');
-
-    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
-    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours };
-    saveState();
-    closeWorkTimeContextMenu();
-    render();
-}
-
-function deleteWorkTimeFromMenu() {
-    if(workTimeContext.mId === null) return;
-    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
-    delete state.workHours[key];
-    saveState();
-    closeWorkTimeContextMenu();
-    render();
-}
-
-function renderWorkHoursForMonteur(mId, rowEl) {
-    Object.entries(state.workHours).forEach(([key, rec]) => {
-        const [year, mmId, day] = key.split('-');
-        if(parseInt(year)!==currentYear || mmId!==mId) return;
-        const dayIdx = parseInt(day);
-        if(Number.isNaN(dayIdx) || dayIdx < 0 || dayIdx >= totalDays) return;
-        const chip = document.createElement('div');
-        chip.className = 'hours-chip';
-        chip.style.left = (dayIdx * dayWidth + 3) + 'px';
-        const hours = (typeof rec === 'number') ? rec : (rec.hours || 0);
-        const from = rec.from || '--:--';
-        const to = rec.to || '--:--';
-        const pause = rec.breakMin || 0;
-        chip.textContent = `${hours}h`;
-        chip.title = `${from}-${to} | Pause ${pause}m`;
-        chip.onclick = ev => { ev.stopPropagation(); openWorkTimeContextMenu(ev, mId, dayIdx); };
-        chip.oncontextmenu = ev => openWorkTimeContextMenu(ev, mId, dayIdx);
-        rowEl.appendChild(chip);
-    });
-}
 
 function isAbsence(entry) {
     return !!entry.absenceType && entry.absenceType !== 'none';
@@ -1125,108 +1042,6 @@ function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Masc
 function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
 
-
-function switchView(view) {
-    const ids = ['dispo','people','tasks','time'];
-    ids.forEach(v => {
-        document.getElementById(`view-${v}`).classList.toggle('active', v===view);
-        const btn = document.querySelector(`.view-btn[data-view="${v}"]`);
-        if(btn) btn.classList.toggle('active', v===view);
-    });
-    if(view === 'people') renderPeopleAdmin();
-    if(view === 'tasks') renderTasksAdmin();
-    if(view === 'time') renderTimeAdmin();
-}
-
-function renderPeopleAdmin() {
-    const peopleEl = document.getElementById('people-admin-list');
-    const resourceEl = document.getElementById('resource-admin-list');
-    if(!peopleEl || !resourceEl) return;
-
-    peopleEl.innerHTML = state.groups.map(g => `
-        <div style="margin-bottom:10px; border:1px solid #eee; border-radius:6px; padding:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${g.name}</strong>
-                <span>
-                    <button class="btn" onclick="openEditModal('group', state.groups.find(x=>x.id==='${g.id}'))">Bearbeiten</button>
-                    <button class="btn btn-primary" onclick="addMonteur(event,'${g.id}')">+ Mitarbeiter</button>
-                </span>
-            </div>
-            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
-        </div>
-    `).join('');
-
-    resourceEl.innerHTML = state.resourceGroups.map(rg => {
-        const res = state.resources.filter(r => r.groupId===rg.id);
-        return `
-        <div style="margin-bottom:10px; border:1px solid #eee; border-radius:6px; padding:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${rg.name}</strong>
-                <span>
-                    <button class="btn" onclick="openEditModal('resourceGroup', state.resourceGroups.find(x=>x.id==='${rg.id}'))">Bearbeiten</button>
-                    <button class="btn btn-warning" onclick="addResource(event,'${rg.id}')">+ Gerät</button>
-                </span>
-            </div>
-            <ul style="margin:8px 0 0 16px;">${res.map(r=>`<li>${r.name} <button class='btn' onclick="openEditModal('resource', state.resources.find(x=>x.id==='${r.id}'))">Bearbeiten</button></li>`).join('')}</ul>
-        </div>`;
-    }).join('');
-    refreshStateJson();
-}
-
-function renderTasksAdmin() {
-    const el = document.getElementById('tasks-admin-list');
-    const yearEl = document.getElementById('tasks-year-label');
-    if(!el || !yearEl) return;
-    yearEl.innerText = currentYear;
-    const tasks = state.einsaetze.filter(e => e.year === currentYear).sort((a,b)=>a.start-b.start);
-    el.innerHTML = `<table class="admin-table"><thead><tr><th>Start</th><th>Dauer</th><th>Titel</th><th>Zugeordnet zu</th><th>Typ</th></tr></thead><tbody>${tasks.map(t=>{
-        const m = getMonteur(t.mId);
-        const r = getResource(t.mId);
-        const owner = m ? m.name : (r ? r.name : '-');
-        const typ = t.absenceType && t.absenceType !== 'none' ? `Abwesenheit: ${t.absenceType}` : 'Einsatz';
-        return `<tr><td>${t.start+1}</td><td>${t.duration}</td><td>${t.title}</td><td>${owner}</td><td>${typ}</td></tr>`;
-    }).join('')}</tbody></table>`;
-}
-
-function renderTimeAdmin() {
-    const el = document.getElementById('time-admin-list');
-    if(!el) return;
-    const rows = Object.entries(state.workHours).map(([key, rec]) => {
-        const [year,mId,dayIdx] = key.split('-');
-        const m = getMonteur(mId);
-        const day = new Date(parseInt(year),0,1); day.setDate(day.getDate()+parseInt(dayIdx));
-        const from = rec.from || '--:--';
-        const to = rec.to || '--:--';
-        const pause = rec.breakMin || 0;
-        const hours = rec.hours || 0;
-        return { year:parseInt(year), name:m?m.name:mId, date:day.toLocaleDateString('de-DE'), from, to, pause, hours };
-    }).sort((a,b)=> a.year!==b.year ? b.year-a.year : a.date.localeCompare(b.date));
-
-    el.innerHTML = `<table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Von</th><th>Bis</th><th>Pause</th><th>Stunden</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.date}</td><td>${r.from}</td><td>${r.to}</td><td>${r.pause}m</td><td>${r.hours}h</td></tr>`).join('')}</tbody></table>`;
-}
-
-function refreshStateJson() {
-    const ta = document.getElementById('state-json');
-    if(ta) ta.value = JSON.stringify(state, null, 2);
-}
-
-function applyStateJson() {
-    const ta = document.getElementById('state-json');
-    if(!ta) return;
-    try {
-        const parsed = JSON.parse(ta.value);
-        state = parsed;
-        normalizeState();
-        saveState();
-        render();
-        renderPeopleAdmin();
-        renderTasksAdmin();
-        renderTimeAdmin();
-        alert('JSON erfolgreich übernommen.');
-    } catch(err) {
-        alert('Ungültiges JSON: ' + err.message);
-    }
-}
 
 document.addEventListener('click', e => { if(!document.getElementById('worktimeMenu').contains(e.target)) closeWorkTimeContextMenu(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeWorkTimeContextMenu(); });
