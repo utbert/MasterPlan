@@ -24,6 +24,18 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .year-display { font-weight: bold; padding: 0 10px; min-width: 45px; text-align: center; font-size: 14px; }
 .toolbar input[type="search"], .toolbar select { padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; }
 .toolbar input[type="search"]{ min-width:220px; }
+.view-nav{ display:flex; gap:6px; margin-right:8px; }
+.view-btn{ padding:6px 10px; border:1px solid var(--border); border-radius:4px; background:#fff; font-size:12px; cursor:pointer; }
+.view-btn.active{ background:#e8f0fe; border-color:#aecbfa; color:#174ea6; }
+.view-page{ display:none; height:100%; overflow:auto; }
+.view-page.active{ display:block; }
+.admin-page{ padding:16px; }
+.admin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.admin-card{ border:1px solid var(--border); border-radius:8px; padding:12px; background:#fff; }
+.admin-card h3{ margin:0 0 10px 0; font-size:15px; }
+.admin-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.admin-table th,.admin-table td{ border-bottom:1px solid #eee; padding:6px 8px; text-align:left; }
+.admin-actions{ display:flex; gap:8px; margin-bottom:10px; }
 
 .app-container{ display:flex; flex-grow:1; overflow:hidden; }
 
@@ -89,6 +101,12 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
 <div class="toolbar">
     <strong>MasterPlan Pro v25.3</strong>
+    <div class="view-nav">
+        <button class="view-btn active" data-view="dispo" onclick="switchView('dispo')">Disposition</button>
+        <button class="view-btn" data-view="people" onclick="switchView('people')">Mitarbeiter</button>
+        <button class="view-btn" data-view="tasks" onclick="switchView('tasks')">Aufgaben</button>
+        <button class="view-btn" data-view="time" onclick="switchView('time')">Zeiterfassung</button>
+    </div>
     <div class="year-nav">
         <button class="btn" onclick="changeYearBy(-1)">❮</button>
         <div class="year-display" id="year-label">2026</div>
@@ -112,6 +130,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     <span id="zoom-info" style="font-size:12px;"></span>
 </div>
 
+<div id="view-dispo" class="view-page active">
 <div class="app-container">
     <div class="sidebar">
         <div class="sidebar-header">Personal & Ressourcen</div>
@@ -129,6 +148,44 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <div id="today-line"></div>
             <div id="grid-content"></div>
         </div>
+    </div>
+</div>
+</div>
+
+<div id="view-people" class="view-page admin-page">
+    <div class="admin-grid">
+        <div class="admin-card">
+            <h3>Mitarbeiter & Teams</h3>
+            <div class="admin-actions"><button class="btn btn-primary" onclick="addTeam()">+ Team</button></div>
+            <div id="people-admin-list"></div>
+        </div>
+        <div class="admin-card">
+            <h3>Ressourcen & Gruppen</h3>
+            <div class="admin-actions"><button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button></div>
+            <div id="resource-admin-list"></div>
+        </div>
+    </div>
+    <div class="admin-card" style="margin-top:16px;">
+        <h3>Daten (JSON)</h3>
+        <div class="admin-actions">
+            <button class="btn" onclick="refreshStateJson()">Aktualisieren</button>
+            <button class="btn" onclick="applyStateJson()">JSON anwenden</button>
+        </div>
+        <textarea id="state-json" style="width:100%; min-height:180px; font-family:monospace;"></textarea>
+    </div>
+</div>
+
+<div id="view-tasks" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Aufgabenübersicht (Jahr <span id="tasks-year-label"></span>)</h3>
+        <div id="tasks-admin-list"></div>
+    </div>
+</div>
+
+<div id="view-time" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Zeiterfassung (Von/Bis/Pause)</h3>
+        <div id="time-admin-list"></div>
     </div>
 </div>
 
@@ -227,27 +284,30 @@ let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     workHours:{}
 };
 
-// Update legacy state
-if(!state.resources) state.resources = [];
-if(!state.resourceGroups || state.resourceGroups.length === 0) {
-    state.resourceGroups = [{id:'rg1', name:'Geräte Hof', collapsed:false}];
-}
-state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
-if(!state.workHours) state.workHours = {};
-state.einsaetze.forEach(e => {
-    if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
-    if(e.isVacation !== undefined) delete e.isVacation;
-});
-Object.keys(state.workHours).forEach(key => {
-    const val = state.workHours[key];
-    if(typeof val === 'number') state.workHours[key] = { from: '', to: '', breakMin: 0, hours: val };
-    if(typeof val === 'string') {
-        const num = parseFloat(val.replace(',', '.'));
-        state.workHours[key] = Number.isNaN(num) ? { from:'', to:'', breakMin:0, hours:0 } : { from:'', to:'', breakMin:0, hours:num };
+function normalizeState() {
+    if(!state.resources) state.resources = [];
+    if(!state.resourceGroups || state.resourceGroups.length === 0) {
+        state.resourceGroups = [{id:'rg1', name:'Geräte Hof', collapsed:false}];
     }
-});
+    state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
+    if(!state.workHours) state.workHours = {};
+    state.einsaetze.forEach(e => {
+        if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
+        if(e.isVacation !== undefined) delete e.isVacation;
+    });
+    Object.keys(state.workHours).forEach(key => {
+        const val = state.workHours[key];
+        if(typeof val === 'number') state.workHours[key] = { from: '', to: '', breakMin: 0, hours: val };
+        if(typeof val === 'string') {
+            const num = parseFloat(val.replace(',', '.'));
+            state.workHours[key] = Number.isNaN(num) ? { from:'', to:'', breakMin:0, hours:0 } : { from:'', to:'', breakMin:0, hours:num };
+        }
+    });
+}
 
-function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
+normalizeState();
+
+function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); refreshStateJson(); }
 
 const mainScroll = document.getElementById('main-scroll');
 const sidebarList = document.getElementById('sidebar-list');
@@ -780,6 +840,9 @@ function render(){
 
     updateTodayLine();
     document.getElementById('zoom-info').innerText=`Zoom: ${Math.round(dayWidth)}px`;
+    renderPeopleAdmin();
+    renderTasksAdmin();
+    renderTimeAdmin();
 }
 
 function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
@@ -1061,6 +1124,109 @@ function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n
 function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
 function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+
+
+function switchView(view) {
+    const ids = ['dispo','people','tasks','time'];
+    ids.forEach(v => {
+        document.getElementById(`view-${v}`).classList.toggle('active', v===view);
+        const btn = document.querySelector(`.view-btn[data-view="${v}"]`);
+        if(btn) btn.classList.toggle('active', v===view);
+    });
+    if(view === 'people') renderPeopleAdmin();
+    if(view === 'tasks') renderTasksAdmin();
+    if(view === 'time') renderTimeAdmin();
+}
+
+function renderPeopleAdmin() {
+    const peopleEl = document.getElementById('people-admin-list');
+    const resourceEl = document.getElementById('resource-admin-list');
+    if(!peopleEl || !resourceEl) return;
+
+    peopleEl.innerHTML = state.groups.map(g => `
+        <div style="margin-bottom:10px; border:1px solid #eee; border-radius:6px; padding:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>${g.name}</strong>
+                <span>
+                    <button class="btn" onclick="openEditModal('group', state.groups.find(x=>x.id==='${g.id}'))">Bearbeiten</button>
+                    <button class="btn btn-primary" onclick="addMonteur(event,'${g.id}')">+ Mitarbeiter</button>
+                </span>
+            </div>
+            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
+        </div>
+    `).join('');
+
+    resourceEl.innerHTML = state.resourceGroups.map(rg => {
+        const res = state.resources.filter(r => r.groupId===rg.id);
+        return `
+        <div style="margin-bottom:10px; border:1px solid #eee; border-radius:6px; padding:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>${rg.name}</strong>
+                <span>
+                    <button class="btn" onclick="openEditModal('resourceGroup', state.resourceGroups.find(x=>x.id==='${rg.id}'))">Bearbeiten</button>
+                    <button class="btn btn-warning" onclick="addResource(event,'${rg.id}')">+ Gerät</button>
+                </span>
+            </div>
+            <ul style="margin:8px 0 0 16px;">${res.map(r=>`<li>${r.name} <button class='btn' onclick="openEditModal('resource', state.resources.find(x=>x.id==='${r.id}'))">Bearbeiten</button></li>`).join('')}</ul>
+        </div>`;
+    }).join('');
+    refreshStateJson();
+}
+
+function renderTasksAdmin() {
+    const el = document.getElementById('tasks-admin-list');
+    const yearEl = document.getElementById('tasks-year-label');
+    if(!el || !yearEl) return;
+    yearEl.innerText = currentYear;
+    const tasks = state.einsaetze.filter(e => e.year === currentYear).sort((a,b)=>a.start-b.start);
+    el.innerHTML = `<table class="admin-table"><thead><tr><th>Start</th><th>Dauer</th><th>Titel</th><th>Zugeordnet zu</th><th>Typ</th></tr></thead><tbody>${tasks.map(t=>{
+        const m = getMonteur(t.mId);
+        const r = getResource(t.mId);
+        const owner = m ? m.name : (r ? r.name : '-');
+        const typ = t.absenceType && t.absenceType !== 'none' ? `Abwesenheit: ${t.absenceType}` : 'Einsatz';
+        return `<tr><td>${t.start+1}</td><td>${t.duration}</td><td>${t.title}</td><td>${owner}</td><td>${typ}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function renderTimeAdmin() {
+    const el = document.getElementById('time-admin-list');
+    if(!el) return;
+    const rows = Object.entries(state.workHours).map(([key, rec]) => {
+        const [year,mId,dayIdx] = key.split('-');
+        const m = getMonteur(mId);
+        const day = new Date(parseInt(year),0,1); day.setDate(day.getDate()+parseInt(dayIdx));
+        const from = rec.from || '--:--';
+        const to = rec.to || '--:--';
+        const pause = rec.breakMin || 0;
+        const hours = rec.hours || 0;
+        return { year:parseInt(year), name:m?m.name:mId, date:day.toLocaleDateString('de-DE'), from, to, pause, hours };
+    }).sort((a,b)=> a.year!==b.year ? b.year-a.year : a.date.localeCompare(b.date));
+
+    el.innerHTML = `<table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Datum</th><th>Von</th><th>Bis</th><th>Pause</th><th>Stunden</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.date}</td><td>${r.from}</td><td>${r.to}</td><td>${r.pause}m</td><td>${r.hours}h</td></tr>`).join('')}</tbody></table>`;
+}
+
+function refreshStateJson() {
+    const ta = document.getElementById('state-json');
+    if(ta) ta.value = JSON.stringify(state, null, 2);
+}
+
+function applyStateJson() {
+    const ta = document.getElementById('state-json');
+    if(!ta) return;
+    try {
+        const parsed = JSON.parse(ta.value);
+        state = parsed;
+        normalizeState();
+        saveState();
+        render();
+        renderPeopleAdmin();
+        renderTasksAdmin();
+        renderTimeAdmin();
+        alert('JSON erfolgreich übernommen.');
+    } catch(err) {
+        alert('Ungültiges JSON: ' + err.message);
+    }
+}
 
 document.addEventListener('click', e => { if(!document.getElementById('worktimeMenu').contains(e.target)) closeWorkTimeContextMenu(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeWorkTimeContextMenu(); });
