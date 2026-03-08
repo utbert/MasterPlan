@@ -86,7 +86,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     </div>
     <button class="btn" onclick="scrollToToday()">Heute</button>
     <button class="btn btn-primary" onclick="addTeam()">+ Team</button>
-    <button class="btn btn-warning" onclick="addResource()">+ Gerät</button>
+    <button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button>
     <input type="search" id="search-input" placeholder="Suche: Team, Mitarbeiter, Gerät, Einsatz..." oninput="render()">
     <select id="status-filter" onchange="render()">
         <option value="all">Alle Einträge</option>
@@ -178,12 +178,17 @@ let editContext = { type: null, id: null, gId: null };
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
-    resources: [{id:'r1', name:'Minibagger 1.5t', rentedTo:''}],
+    resourceGroups:[{id:'rg1',name:'Geräte Hof',collapsed:false}],
+    resources: [{id:'r1', groupId:'rg1', name:'Minibagger 1.5t', rentedTo:''}],
     einsaetze:[]
 };
 
 // Update legacy state
 if(!state.resources) state.resources = [];
+if(!state.resourceGroups || state.resourceGroups.length === 0) {
+    state.resourceGroups = [{id:'rg1', name:'Geräte Hof', collapsed:false}];
+}
+state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
 
 function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
 
@@ -208,6 +213,11 @@ function getMonteur(mId) {
 
 function getResource(rId) {
     return state.resources.find(x => x.id === rId) || null;
+}
+
+
+function getResourceGroup(rgId) {
+    return state.resourceGroups.find(x => x.id === rgId) || null;
 }
 
 function getDayOffset(dateStr) {
@@ -537,15 +547,19 @@ function render(){
     });
 
     // Maschinen & Geräte Rendern
-    const visibleResources = state.resources.filter(res => {
-        const resourceTasks = state.einsaetze.filter(e => e.mId === res.id && e.year === currentYear);
-        const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${res.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
-        const nameMatch = matchesOptionalSearch(res.name, searchTerm);
-        const noFilterActive = statusFilter === 'all' && searchTerm === '';
-        return noFilterActive || nameMatch || hasMatchingTask;
-    });
+    const visibleResourceGroups = state.resourceGroups.map(rg => {
+        const resourcesInGroup = state.resources.filter(res => res.groupId === rg.id);
+        const visibleResources = resourcesInGroup.filter(res => {
+            const resourceTasks = state.einsaetze.filter(e => e.mId === res.id && e.year === currentYear);
+            const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${res.name} ${rg.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+            const nameMatch = matchesOptionalSearch(`${res.name} ${rg.name}`, searchTerm);
+            const noFilterActive = statusFilter === 'all' && searchTerm === '';
+            return noFilterActive || nameMatch || hasMatchingTask;
+        });
+        return { rg, visibleResources };
+    }).filter(x => x.visibleResources.length > 0 || (statusFilter === 'all' && searchTerm === ''));
 
-    if(visibleResources.length > 0) {
+    if(visibleResourceGroups.length > 0) {
         const resSide = document.createElement('div');
         resSide.className = 'row-group sidebar-item';
         resSide.style.backgroundColor = '#fff3e0';
@@ -557,22 +571,54 @@ function render(){
         grid.appendChild(resGrid);
         currentY += 38;
 
-        visibleResources.forEach(res => {
-            const rSide = document.createElement('div');
-            rSide.className = 'sidebar-monteur sidebar-item';
-            rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
-                              (res.rentedTo ? `<span style="font-size:10px; color:#e65100; font-weight:bold; width:100%; display:block; margin-top:2px;">↳ Verliehen an: ${res.rentedTo}</span>` : '');
-            rSide.ondblclick = e => { e.stopPropagation(); openEditModal('resource', res); };
-            sidebar.appendChild(rSide);
+        visibleResourceGroups.forEach(({rg, visibleResources}) => {
+            const rgSide = document.createElement('div');
+            rgSide.className = 'row-group sidebar-item';
+            rgSide.style.backgroundColor = '#fff8ef';
+            rgSide.innerHTML = `<span>${rg.collapsed?'▶':'▼'} ${rg.name}</span><div style="display:flex"><span class="action-btn" onclick="addResource(event,'${rg.id}')">+</span></div>`;
+            rgSide.onclick = e => { if(!e.target.classList.contains('action-btn')) { rg.collapsed = !rg.collapsed; saveState(); render(); } };
+            rgSide.ondblclick = e => { e.stopPropagation(); openEditModal('resourceGroup', rg); };
+            rgSide.ondragover = e => { e.preventDefault(); rgSide.classList.add('drag-over'); };
+            rgSide.ondragleave = () => rgSide.classList.remove('drag-over');
+            rgSide.ondrop = e => {
+                e.preventDefault(); rgSide.classList.remove('drag-over');
+                try {
+                    const data = JSON.parse(e.dataTransfer.getData('text'));
+                    if(data.rId) {
+                        const r = state.resources.find(x => x.id === data.rId);
+                        if(r && r.groupId !== rg.id) { r.groupId = rg.id; saveState(); render(); }
+                    }
+                } catch(err) {}
+            };
+            sidebar.appendChild(rgSide);
 
-            const rGrid = document.createElement('div');
-            rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
-            rGrid.onclick = e => gridClick(e, res.id);
-            grid.appendChild(rGrid);
-            activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
+            const rgGrid = document.createElement('div');
+            rgGrid.className = 'row-group'; rgGrid.style.width = width + 'px';
+            grid.appendChild(rgGrid);
+            currentY += 38;
 
-            renderTasksForId(res.id, rGrid, grid, currentY, searchTerm, statusFilter);
-            currentY += 50;
+            if(!rg.collapsed) {
+                visibleResources.forEach(res => {
+                    const rSide = document.createElement('div');
+                    rSide.className = 'sidebar-monteur sidebar-item';
+                    rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
+                                      (res.rentedTo ? `<span style="font-size:10px; color:#e65100; font-weight:bold; width:100%; display:block; margin-top:2px;">↳ Verliehen an: ${res.rentedTo}</span>` : '');
+                    rSide.ondblclick = e => { e.stopPropagation(); openEditModal('resource', res); };
+                    rSide.setAttribute('draggable', 'true');
+                    rSide.ondragstart = e => { e.dataTransfer.setData('text', JSON.stringify({ rId: res.id, rgId: rg.id })); setTimeout(() => rSide.style.opacity = '0.5', 0); };
+                    rSide.ondragend = () => { rSide.style.opacity = '1'; };
+                    sidebar.appendChild(rSide);
+
+                    const rGrid = document.createElement('div');
+                    rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
+                    rGrid.onclick = e => gridClick(e, res.id);
+                    grid.appendChild(rGrid);
+                    activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
+
+                    renderTasksForId(res.id, rGrid, grid, currentY, searchTerm, statusFilter);
+                    currentY += 50;
+                });
+            }
         });
     }
 
@@ -727,7 +773,7 @@ function scrollToToday(){
 
 function openEditModal(type, item, gId = null) {
     editContext = { type, id: item.id, gId };
-    document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
+    document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resourceGroup'?'Gerätegruppe':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
     document.getElementById('labelTitle').innerText = type === 'resource' ? 'Maschinen-Name' : 'Bezeichnung / Name';
     document.getElementById('fieldTitle').value = item.name || item.title || '';
     
@@ -810,6 +856,8 @@ function saveModal() {
         sanitizeLinkedTask(e);
     } else if(editContext.type==='group'){
         state.groups.find(x=>x.id===editContext.id).name=val;
+    } else if(editContext.type==='resourceGroup'){
+        state.resourceGroups.find(x=>x.id===editContext.id).name=val;
     } else if(editContext.type==='resource'){
         const r = state.resources.find(x=>x.id===editContext.id);
         r.name=val;
@@ -828,6 +876,12 @@ function deleteCurrentItem() {
     if(!confirm("Wirklich löschen?")) return;
     if(editContext.type==='einsatz') state.einsaetze=state.einsaetze.filter(x=>x.id!==editContext.id);
     else if(editContext.type==='group') state.groups=state.groups.filter(x=>x.id!==editContext.id);
+    else if(editContext.type==='resourceGroup') {
+        const fallback = state.resourceGroups.find(x=>x.id!==editContext.id);
+        if(!fallback) return alert('Mindestens eine Gerätegruppe muss bestehen bleiben.');
+        state.resources.forEach(r => { if(r.groupId===editContext.id) r.groupId = fallback.id; });
+        state.resourceGroups=state.resourceGroups.filter(x=>x.id!==editContext.id);
+    }
     else if(editContext.type==='resource') state.resources=state.resources.filter(x=>x.id!==editContext.id);
     else state.groups.find(x=>x.id===editContext.gId).monteure=state.groups.find(x=>x.id===editContext.gId).monteure.filter(x=>x.id!==editContext.id);
     saveState(); closeModal(); render();
@@ -847,7 +901,8 @@ function gridClick(ev,mId){
 
 function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }
 function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, empStart:'', empEnd:''}); saveState(); render(); } }
-function addResource(){ const n=prompt("Maschinen- / Gerätename:"); if(n) { state.resources.push({id:'r'+Date.now(),name:n, rentedTo:''}); saveState(); render(); } }
+function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
+function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
 
 updateYearBase(); render(); setTimeout(scrollToToday, 200);
