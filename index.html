@@ -45,12 +45,14 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .header-row{ display:flex; height:35px; border-bottom:1px solid rgba(255,255,255,0.2); }
 .header-cell{ flex-shrink:0; text-align:center; line-height:35px; font-size:11px; font-weight:bold; border-right:1px solid rgba(255,255,255,0.2); }
 .header-cell.is-today{ background:var(--today-bg)!important; color:#333; }
+.header-cell.is-holiday{ background:#d93025!important; color:#fff; }
 
 .grid{ position:relative; width:fit-content; }
 .row-monteur{ height:var(--row-height); border-bottom:1px solid #eee; position:relative; }
 .grid-background{ position:absolute; top:0; left:0; right:0; bottom:0; display:flex; z-index:0; pointer-events:none; }
 .bg-day{ height:100%; border-right:1px solid #f1f3f4; flex-shrink:0; }
 .bg-weekend{ background-color:var(--weekend-bg); }
+.bg-holiday{ background-color:#fde8e7; }
 
 /* Schraffur für nicht eingestellte Zeiträume */
 .out-of-office { position: absolute; top:0; bottom:0; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px); z-index: 5; pointer-events: none; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
@@ -65,7 +67,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 /* Modal */
 .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:2000; }
 .modal { background:white; padding:20px; border-radius:8px; width:350px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-.modal input[type="text"], .modal input[type="number"], .modal input[type="date"] { width:100%; padding:8px; margin:5px 0 15px 0; border:1px solid var(--border); border-radius:4px; }
+.modal input[type="text"], .modal input[type="number"], .modal input[type="date"], .modal select { width:100%; padding:8px; margin:5px 0 15px 0; border:1px solid var(--border); border-radius:4px; }
 .modal label { font-size: 12px; color: #555; font-weight: bold; }
 
 #today-line{ position:absolute; top:0; bottom:0; width:2px; background:#ea4335; z-index:20; pointer-events:none; }
@@ -137,6 +139,11 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <label id="wrapRented" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer; margin-top:5px;">
                 <input type="checkbox" id="fieldIsRentedTimeline" style="width:auto; margin:0;"> Extern verliehen?
             </label>
+
+            <div id="wrapLinkedTask" style="display:none; margin-top:10px; flex-direction:column;">
+                <label>Mitarbeiter-Aufgabe zuordnen</label>
+                <select id="fieldLinkedTask"></select>
+            </div>
         </div>
 
         <div id="monteurFields" style="display:none;">
@@ -210,6 +217,90 @@ function getDayOffset(dateStr) {
     if(!dateStr) return null;
     let d = new Date(dateStr); d.setHours(0,0,0,0);
     return Math.round((d - new Date(currentYear, 0, 1)) / 86400000);
+}
+
+function calcEasterSunday(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+}
+
+function getHolidayMap(year) {
+    const map = new Map();
+    const addHoliday = (date, name) => {
+        if(date.getFullYear() !== year) return;
+        const idx = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(year, 0, 1)) / 86400000);
+        map.set(idx, name);
+    };
+
+    addHoliday(new Date(year, 0, 1), 'Neujahr');
+    addHoliday(new Date(year, 4, 1), 'Tag der Arbeit');
+    addHoliday(new Date(year, 9, 3), 'Tag der Deutschen Einheit');
+    addHoliday(new Date(year, 11, 25), '1. Weihnachtstag');
+    addHoliday(new Date(year, 11, 26), '2. Weihnachtstag');
+
+    const easter = calcEasterSunday(year);
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() - 2), 'Karfreitag');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 1), 'Ostermontag');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 39), 'Christi Himmelfahrt');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 50), 'Pfingstmontag');
+    return map;
+}
+
+function rangesOverlap(startA, durationA, startB, durationB) {
+    const endA = startA + durationA - 1;
+    const endB = startB + durationB - 1;
+    return !(endA < startB || startA > endB);
+}
+
+function getLinkableTasksForResourceEinsatz(item) {
+    return state.einsaetze.filter(e => e.year === currentYear && getMonteur(e.mId) !== null && rangesOverlap(item.start, item.duration, e.start, e.duration));
+}
+
+function getEinsatzById(eId) {
+    return state.einsaetze.find(e => e.id === eId) || null;
+}
+
+function getLinkedTaskLabel(linkedTaskId) {
+    if(!linkedTaskId) return '';
+    const linked = getEinsatzById(linkedTaskId);
+    if(!linked) return ' (Zuordnung fehlt)';
+    const m = getMonteur(linked.mId);
+    return m ? ` (${m.name}: ${linked.title})` : '';
+}
+
+function sanitizeLinkedTask(item) {
+    if(!item || !item.linkedTaskId) return;
+    if(!getResource(item.mId)) { item.linkedTaskId = null; return; }
+    const linked = getEinsatzById(item.linkedTaskId);
+    if(!linked || linked.year !== currentYear || !getMonteur(linked.mId) || !rangesOverlap(item.start, item.duration, linked.start, linked.duration)) {
+        item.linkedTaskId = null;
+    }
+}
+
+function getTaskSearchBlob(entry) {
+    let blob = `${entry.title}`;
+    if(entry.linkedTaskId) {
+        const linked = getEinsatzById(entry.linkedTaskId);
+        if(linked) {
+            const linkedMonteur = getMonteur(linked.mId);
+            blob += ` ${linked.title}`;
+            if(linkedMonteur) blob += ` ${linkedMonteur.name}`;
+        }
+    }
+    return blob;
 }
 
 function isPlacementValid(mId, startIdx, durationIdx) {
@@ -287,6 +378,8 @@ function render(){
     const width=totalDays*dayWidth;
     topRow.style.width=width+'px'; bottomRow.style.width=width+'px';
 
+    const holidayMap = getHolidayMap(currentYear);
+
     let i=0;
     while(i<totalDays){
         let d=new Date(startDate); d.setDate(startDate.getDate()+i);
@@ -300,7 +393,8 @@ function render(){
     if(dayWidth>=60){
         for(let j=0;j<totalDays;j++){
             let d=new Date(startDate); d.setDate(startDate.getDate()+j);
-            addCell(bottomRow,1,d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}), d.toDateString()===today.toDateString() && currentYear === today.getFullYear());
+            const holidayName = holidayMap.get(j) || '';
+            addCell(bottomRow,1,d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}), d.toDateString()===today.toDateString() && currentYear === today.getFullYear(), !!holidayName, holidayName);
         }
     } else {
         let j2=0;
@@ -318,7 +412,9 @@ function render(){
     for(let k=0;k<totalDays;k++){
         let d=new Date(startDate); d.setDate(startDate.getDate()+k);
         const div=document.createElement('div');
-        div.className='bg-day'+(d.getDay()===0||d.getDay()===6?' bg-weekend':'');
+        const holidayName = holidayMap.get(k) || '';
+        div.className='bg-day'+(d.getDay()===0||d.getDay()===6?' bg-weekend':'')+(holidayName ? ' bg-holiday' : '');
+        if(holidayName) div.title = holidayName;
         div.style.width=dayWidth+'px';
         bg.appendChild(div);
     }
@@ -335,7 +431,7 @@ function render(){
     state.groups.forEach(g=>{
         const visibleMonteurs = g.monteure.filter(m => {
             const monteurTasks = state.einsaetze.filter(e => e.mId === m.id && e.year === currentYear);
-            const hasMatchingTask = monteurTasks.some(e => matchesSearch(`${e.title} ${m.name} ${g.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+            const hasMatchingTask = monteurTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${m.name} ${g.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
             const nameMatch = matchesOptionalSearch(`${m.name} ${g.name}`, searchTerm);
             const noFilterActive = statusFilter === 'all' && searchTerm === '';
             return noFilterActive || nameMatch || hasMatchingTask;
@@ -414,7 +510,7 @@ function render(){
     // Maschinen & Geräte Rendern
     const visibleResources = state.resources.filter(res => {
         const resourceTasks = state.einsaetze.filter(e => e.mId === res.id && e.year === currentYear);
-        const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${e.title} ${res.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+        const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${res.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
         const nameMatch = matchesOptionalSearch(res.name, searchTerm);
         const noFilterActive = statusFilter === 'all' && searchTerm === '';
         return noFilterActive || nameMatch || hasMatchingTask;
@@ -457,7 +553,7 @@ function render(){
 
 function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
     state.einsaetze.filter(e => e.mId === mId && e.year === currentYear)
-    .filter(e => matchesStatusFilter(e, statusFilter) && matchesSearch(`${e.title}`, searchTerm))
+    .filter(e => matchesStatusFilter(e, statusFilter) && matchesSearch(getTaskSearchBlob(e), searchTerm))
     .forEach(e => {
         const bar=document.createElement('div');
         bar.className='bar' + (e.isVacation ? ' is-vacation' : '') + (e.isRented ? ' is-rented' : '');
@@ -466,7 +562,8 @@ function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter 
         bar.style.width=(e.duration*dayWidth - 2)+'px';
         if(!e.isRented) bar.style.backgroundColor = e.color || '#4285f4';
         
-        bar.innerHTML=`<div class="bar-content"><strong>${e.title}</strong></div><div class="resizer"></div>`;
+        const linkedLabel = getLinkedTaskLabel(e.linkedTaskId);
+        bar.innerHTML=`<div class="bar-content"><strong>${e.title}${linkedLabel}</strong></div><div class="resizer"></div>`;
         bar.addEventListener('dblclick', (ev) => { ev.stopPropagation(); openEditModal('einsatz', e); });
         bar.querySelector('.resizer').onmousedown=ev=>initResize(ev,e,bar);
         bar.onmousedown = ev => { if(!ev.target.classList.contains('resizer')) initMove(ev,e,bar); };
@@ -474,9 +571,11 @@ function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter 
     });
 }
 
-function addCell(row,span,text,isToday=false){
-    const div=document.createElement('div'); div.className='header-cell'+(isToday?' is-today':'');
-    div.style.width=(span*dayWidth)+'px'; div.innerText=text; row.appendChild(div);
+function addCell(row,span,text,isToday=false,isHoliday=false,holidayTitle=''){
+    const div=document.createElement('div'); div.className='header-cell'+(isToday?' is-today':'')+(isHoliday?' is-holiday':'');
+    div.style.width=(span*dayWidth)+'px'; div.innerText=text;
+    if(holidayTitle) div.title = holidayTitle;
+    row.appendChild(div);
 }
 
 function initMove(ev, item, bar) {
@@ -512,8 +611,8 @@ function initMove(ev, item, bar) {
         let isHuman = getMonteur(newMId) !== null;
         if(isHuman) item.isRented = false; else item.isVacation = false;
 
-        if (e.ctrlKey) { state.einsaetze.push({ ...item, id: 'e' + Date.now(), start: newStart, mId: newMId }); } 
-        else { item.start = newStart; item.mId = newMId; }
+        if (e.ctrlKey) { const clonedItem = { ...item, id: 'e' + Date.now(), start: newStart, mId: newMId }; sanitizeLinkedTask(clonedItem); state.einsaetze.push(clonedItem); } 
+        else { item.start = newStart; item.mId = newMId; sanitizeLinkedTask(item); }
         saveState(); render(); 
     };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -526,9 +625,12 @@ function initResize(ev,item,bar){
         window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); 
         let pCheck = validatePlacement(item.mId, item.start, item.duration, item.id);
         if(!pCheck.valid) { alert(pCheck.msg); item.duration = startD; }
-        else if(item.isVacation) {
+        else {
+            sanitizeLinkedTask(item);
+            if(item.isVacation) {
             let vCheck = checkVacationLimit(item.mId, item.id, item.duration);
             if(!vCheck.valid) { alert(vCheck.msg); item.duration = startD; }
+            }
         }
         saveState(); render(); 
     };
@@ -565,17 +667,33 @@ function openEditModal(type, item, gId = null) {
     document.getElementById('einsatzFields').style.display = type === 'einsatz' ? 'block' : 'none';
     document.getElementById('monteurFields').style.display = type === 'monteur' ? 'block' : 'none';
     document.getElementById('resourceFields').style.display = type === 'resource' ? 'block' : 'none';
+    if(type !== 'einsatz') document.getElementById('wrapLinkedTask').style.display = 'none';
     
     if(type==='einsatz'){
         document.getElementById('fieldDuration').value = item.duration;
         document.getElementById('fieldColor').value = item.color;
         
         let isHuman = getMonteur(item.mId) !== null;
+        const isResource = getResource(item.mId) !== null;
         document.getElementById('wrapVacation').style.display = isHuman ? 'flex' : 'none';
         document.getElementById('wrapRented').style.display = isHuman ? 'none' : 'flex';
-        
+        document.getElementById('wrapLinkedTask').style.display = isResource ? 'flex' : 'none';
+
+        const linkedSelect = document.getElementById('fieldLinkedTask');
+        linkedSelect.innerHTML = '<option value="">-- Keine Zuordnung --</option>';
+        if(isResource) {
+            getLinkableTasksForResourceEinsatz(item).forEach(linked => {
+                const monteur = getMonteur(linked.mId);
+                const option = document.createElement('option');
+                option.value = linked.id;
+                option.textContent = `${monteur ? monteur.name : 'Mitarbeiter'} · ${linked.title}`;
+                linkedSelect.appendChild(option);
+            });
+        }
+
         document.getElementById('fieldIsVacation').checked = item.isVacation || false;
         document.getElementById('fieldIsRentedTimeline').checked = item.isRented || false;
+        linkedSelect.value = item.linkedTaskId || '';
     } else if(type==='monteur'){
         document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
         document.getElementById('fieldEmpStart').value = item.empStart || '';
@@ -605,7 +723,10 @@ function saveModal() {
             if(!vCheck.valid) return alert(vCheck.msg);
         }
 
+        const linkedTaskId = document.getElementById('fieldLinkedTask').value || null;
         e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=isRented;
+        e.linkedTaskId = getResource(e.mId) ? linkedTaskId : null;
+        sanitizeLinkedTask(e);
     } else if(editContext.type==='group'){
         state.groups.find(x=>x.id===editContext.id).name=val;
     } else if(editContext.type==='resource'){
@@ -639,7 +760,7 @@ function gridClick(ev,mId){
     let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
 
-    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false }; 
+    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false, linkedTaskId: null }; 
     state.einsaetze.push(newItem); saveState(); render(); openEditModal('einsatz', newItem); 
 }
 
