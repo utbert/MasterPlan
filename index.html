@@ -69,6 +69,11 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .bar-content{ flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 .resizer{ width:10px; height:100%; position:absolute; right:0; top:0; cursor:col-resize; z-index: 12; }
 .hours-chip{ position:absolute; top:2px; left:2px; font-size:10px; line-height:1; background:rgba(26,115,232,0.12); color:#0b57d0; border:1px solid rgba(26,115,232,0.25); border-radius:3px; padding:2px 3px; z-index:6; cursor:pointer; }
+.context-menu{ position:fixed; display:none; z-index:3000; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); width:260px; padding:12px; }
+.context-menu h4{ margin:0 0 10px 0; font-size:13px; }
+.context-menu label{ display:block; font-size:12px; color:#555; margin-bottom:4px; }
+.context-menu input{ width:100%; margin:0 0 10px 0; padding:6px 8px; border:1px solid var(--border); border-radius:4px; }
+.context-menu .menu-actions{ display:flex; gap:8px; justify-content:flex-end; }
 
 /* Modal */
 .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:2000; }
@@ -189,6 +194,21 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     </div>
 </div>
 
+
+<div id="worktimeMenu" class="context-menu" oncontextmenu="event.preventDefault()">
+    <h4>Arbeitszeit erfassen</h4>
+    <label>Von</label>
+    <input type="time" id="wtFrom" step="900">
+    <label>Bis</label>
+    <input type="time" id="wtTo" step="900">
+    <label>Pause (Minuten)</label>
+    <input type="number" id="wtBreak" min="0" step="5" value="0">
+    <div class="menu-actions">
+        <button class="btn" onclick="deleteWorkTimeFromMenu()">Löschen</button>
+        <button class="btn btn-primary" onclick="saveWorkTimeFromMenu()">Speichern</button>
+    </div>
+</div>
+
 <script>
 let currentYear = 2026;
 let dayWidth = 100;
@@ -197,6 +217,7 @@ let startDate = new Date(currentYear, 0, 1);
 const today = new Date();
 let activeRowOffsets = []; 
 let editContext = { type: null, id: null, gId: null };
+let workTimeContext = { mId: null, dayIdx: null };
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
@@ -216,6 +237,14 @@ if(!state.workHours) state.workHours = {};
 state.einsaetze.forEach(e => {
     if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
     if(e.isVacation !== undefined) delete e.isVacation;
+});
+Object.keys(state.workHours).forEach(key => {
+    const val = state.workHours[key];
+    if(typeof val === 'number') state.workHours[key] = { from: '', to: '', breakMin: 0, hours: val };
+    if(typeof val === 'string') {
+        const num = parseFloat(val.replace(',', '.'));
+        state.workHours[key] = Number.isNaN(num) ? { from:'', to:'', breakMin:0, hours:0 } : { from:'', to:'', breakMin:0, hours:num };
+    }
 });
 
 function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
@@ -375,20 +404,69 @@ function getWorkHoursKey(mId, dayIdx) {
     return `${currentYear}-${mId}-${dayIdx}`;
 }
 
-function setWorkHoursForMonteur(mId, dayIdx) {
-    const date = new Date(startDate); date.setDate(startDate.getDate()+dayIdx);
+function toMinutes(timeStr) {
+    if(!timeStr || !timeStr.includes(':')) return null;
+    const [h,m] = timeStr.split(':').map(x => parseInt(x,10));
+    if(Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h*60+m;
+}
+
+function calcHoursFromRange(from, to, breakMin) {
+    const fromMin = toMinutes(from);
+    const toMin = toMinutes(to);
+    if(fromMin === null || toMin === null || toMin <= fromMin) return null;
+    const pause = Math.max(0, parseInt(breakMin || 0, 10));
+    const worked = Math.max(0, toMin - fromMin - pause);
+    return Math.round((worked / 60) * 100) / 100;
+}
+
+function openWorkTimeContextMenu(ev, mId, dayIdx) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const menu = document.getElementById('worktimeMenu');
     const key = getWorkHoursKey(mId, dayIdx);
-    const existing = state.workHours[key] !== undefined ? state.workHours[key] : '';
-    const input = prompt(`Arbeitsstunden für ${date.toLocaleDateString('de-DE')} (${getMonteur(mId)?.name || ''})`, existing);
-    if(input === null) return;
-    const val = parseFloat(String(input).replace(',', '.'));
-    if(Number.isNaN(val) || val < 0) { delete state.workHours[key]; }
-    else state.workHours[key] = val;
-    saveState(); render();
+    const current = state.workHours[key] || { from:'', to:'', breakMin:0, hours:0 };
+
+    workTimeContext = { mId, dayIdx };
+    document.getElementById('wtFrom').value = current.from || '';
+    document.getElementById('wtTo').value = current.to || '';
+    document.getElementById('wtBreak').value = current.breakMin || 0;
+
+    menu.style.display = 'block';
+    menu.style.left = Math.min(window.innerWidth - 280, ev.clientX) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 240, ev.clientY) + 'px';
+}
+
+function closeWorkTimeContextMenu() {
+    document.getElementById('worktimeMenu').style.display = 'none';
+}
+
+function saveWorkTimeFromMenu() {
+    if(workTimeContext.mId === null) return;
+    const from = document.getElementById('wtFrom').value;
+    const to = document.getElementById('wtTo').value;
+    const breakMin = parseInt(document.getElementById('wtBreak').value || 0, 10);
+    const hours = calcHoursFromRange(from, to, breakMin);
+    if(hours === null) return alert('Bitte gültige Von/Bis-Zeit eingeben (Bis muss nach Von liegen).');
+
+    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
+    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours };
+    saveState();
+    closeWorkTimeContextMenu();
+    render();
+}
+
+function deleteWorkTimeFromMenu() {
+    if(workTimeContext.mId === null) return;
+    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
+    delete state.workHours[key];
+    saveState();
+    closeWorkTimeContextMenu();
+    render();
 }
 
 function renderWorkHoursForMonteur(mId, rowEl) {
-    Object.entries(state.workHours).forEach(([key, hours]) => {
+    Object.entries(state.workHours).forEach(([key, rec]) => {
         const [year, mmId, day] = key.split('-');
         if(parseInt(year)!==currentYear || mmId!==mId) return;
         const dayIdx = parseInt(day);
@@ -396,9 +474,14 @@ function renderWorkHoursForMonteur(mId, rowEl) {
         const chip = document.createElement('div');
         chip.className = 'hours-chip';
         chip.style.left = (dayIdx * dayWidth + 3) + 'px';
+        const hours = (typeof rec === 'number') ? rec : (rec.hours || 0);
+        const from = rec.from || '--:--';
+        const to = rec.to || '--:--';
+        const pause = rec.breakMin || 0;
         chip.textContent = `${hours}h`;
-        chip.title = 'Alt+Klick auf Zeile zum Bearbeiten';
-        chip.onclick = ev => { ev.stopPropagation(); setWorkHoursForMonteur(mId, dayIdx); };
+        chip.title = `${from}-${to} | Pause ${pause}m`;
+        chip.onclick = ev => { ev.stopPropagation(); openWorkTimeContextMenu(ev, mId, dayIdx); };
+        chip.oncontextmenu = ev => openWorkTimeContextMenu(ev, mId, dayIdx);
         rowEl.appendChild(chip);
     });
 }
@@ -589,6 +672,11 @@ function render(){
                 const mGrid=document.createElement('div');
                 mGrid.className='row-monteur'; mGrid.style.width=width+'px';
                 mGrid.onclick = e => gridClick(e, m.id);
+                mGrid.oncontextmenu = e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const dayIdx = Math.floor((e.clientX-rect.left)/dayWidth);
+                    if(dayIdx >= 0 && dayIdx < totalDays) openWorkTimeContextMenu(e, m.id, dayIdx);
+                };
                 grid.appendChild(mGrid);
                 activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: m.id });
                 renderWorkHoursForMonteur(m.id, mGrid);
@@ -960,7 +1048,6 @@ function gridClick(ev,mId){
     const rect=ev.currentTarget.getBoundingClientRect(); 
     const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
 
-    if(ev.altKey && getMonteur(mId)) { setWorkHoursForMonteur(mId, start); return; }
     
     let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
@@ -974,6 +1061,10 @@ function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n
 function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
 function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+
+document.addEventListener('click', e => { if(!document.getElementById('worktimeMenu').contains(e.target)) closeWorkTimeContextMenu(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeWorkTimeContextMenu(); });
+window.addEventListener('scroll', closeWorkTimeContextMenu, true);
 
 updateYearBase(); render(); setTimeout(scrollToToday, 200);
 </script>
