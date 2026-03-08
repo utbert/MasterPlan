@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>MasterPlan Pro v25.3 - HR & Vacation Control</title>
+<style>
+:root{
+    --name-width:300px; --day-width:100px; --row-height:50px; --group-height:38px;
+    --header-bg:#1a73e8; --header-dark:#1557b0; --accent:#4285f4; --border:#dadce0;
+    --weekend-bg:#f8f9fa; --today-bg:#ffeb3b;
+}
+
+* { box-sizing: border-box; }
+
+body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:column; height:100vh; overflow:hidden; background:#fff; }
+
+.toolbar{ height:55px; background:white; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 20px; gap:10px; z-index:1000; flex-shrink: 0; }
+.btn{ padding:6px 12px; border:1px solid var(--border); background:white; border-radius:4px; cursor:pointer; font-size:13px; font-weight:500; }
+.btn-primary{ background:var(--accent); color:white; border:none; }
+.btn-warning{ background:#ff9800; color:white; border:none; }
+.btn-danger{ background:#ea4335; color:white; border:none; margin-right: auto; }
+
+.year-nav { display: flex; align-items: center; gap: 5px; background: #f1f3f4; padding: 4px; border-radius: 6px; }
+.year-display { font-weight: bold; padding: 0 10px; min-width: 45px; text-align: center; font-size: 14px; }
+
+.app-container{ display:flex; flex-grow:1; overflow:hidden; }
+
+/* Sidebar */
+.sidebar{ width:var(--name-width); flex-shrink:0; border-right:2px solid #ccc; display:flex; flex-direction:column; z-index:500; background:#fff; }
+.sidebar-header{ height:70px; display:flex; align-items:center; padding-left:15px; font-weight:bold; background:#f8f9fa; border-bottom:1px solid var(--border); flex-shrink: 0; }
+.sidebar-content-viewport { flex-grow: 1; overflow: hidden; position: relative; }
+#sidebar-list { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
+
+.sidebar-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 15px; user-select: none; }
+.row-group{ height:var(--group-height); background:#f1f3f4; border-bottom:1px solid var(--border); font-weight:bold; font-size:12px; cursor:pointer; line-height: var(--group-height); transition: background 0.2s; }
+.row-group.drag-over { background: #e8f0fe !important; border-bottom: 2px solid var(--accent); }
+.sidebar-monteur{ padding-left:30px; height:var(--row-height); border-bottom:1px solid #eee; background: white; font-size: 14px; line-height: normal; cursor: grab; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
+.sidebar-monteur:active { cursor: grabbing; }
+
+/* Grid */
+.timeline-viewport{ flex-grow:1; overflow:auto; position:relative; }
+.timeline-header{ position:sticky; top:0; z-index:600; background:var(--header-bg); color:white; width:fit-content; }
+.header-row{ display:flex; height:35px; border-bottom:1px solid rgba(255,255,255,0.2); }
+.header-cell{ flex-shrink:0; text-align:center; line-height:35px; font-size:11px; font-weight:bold; border-right:1px solid rgba(255,255,255,0.2); }
+.header-cell.is-today{ background:var(--today-bg)!important; color:#333; }
+
+.grid{ position:relative; width:fit-content; }
+.row-monteur{ height:var(--row-height); border-bottom:1px solid #eee; position:relative; }
+.grid-background{ position:absolute; top:0; left:0; right:0; bottom:0; display:flex; z-index:0; pointer-events:none; }
+.bg-day{ height:100%; border-right:1px solid #f1f3f4; flex-shrink:0; }
+.bg-weekend{ background-color:var(--weekend-bg); }
+
+/* Schraffur für nicht eingestellte Zeiträume */
+.out-of-office { position: absolute; top:0; bottom:0; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px); z-index: 5; pointer-events: none; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
+
+/* Bars */
+.bar{ position:absolute; height:34px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:11px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top: 8px; user-select: none; }
+.bar.is-vacation { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
+.bar.is-rented { background-color: #ff9800 !important; background-image: repeating-linear-gradient(-45deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 10px, transparent 10px, transparent 20px) !important; color: #fff !important; }
+.bar-content{ flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+.resizer{ width:10px; height:100%; position:absolute; right:0; top:0; cursor:col-resize; z-index: 12; }
+
+/* Modal */
+.modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:2000; }
+.modal { background:white; padding:20px; border-radius:8px; width:350px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+.modal input[type="text"], .modal input[type="number"], .modal input[type="date"] { width:100%; padding:8px; margin:5px 0 15px 0; border:1px solid var(--border); border-radius:4px; }
+.modal label { font-size: 12px; color: #555; font-weight: bold; }
+
+#today-line{ position:absolute; top:0; bottom:0; width:2px; background:#ea4335; z-index:20; pointer-events:none; }
+.action-btn{ cursor:pointer; font-size:18px; color:#999; padding: 0 5px; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+    <strong>MasterPlan Pro v25.3</strong>
+    <div class="year-nav">
+        <button class="btn" onclick="changeYearBy(-1)">❮</button>
+        <div class="year-display" id="year-label">2026</div>
+        <button class="btn" onclick="changeYearBy(1)">❯</button>
+    </div>
+    <button class="btn" onclick="scrollToToday()">Heute</button>
+    <button class="btn btn-primary" onclick="addTeam()">+ Team</button>
+    <button class="btn btn-warning" onclick="addResource()">+ Gerät</button>
+    <button class="btn" onclick="zoom(1.2)">🔍 +</button>
+    <button class="btn" onclick="zoom(0.8)">🔍 -</button>
+    <div style="flex-grow:1;"></div>
+    <span id="zoom-info" style="font-size:12px;"></span>
+</div>
+
+<div class="app-container">
+    <div class="sidebar">
+        <div class="sidebar-header">Personal & Ressourcen</div>
+        <div class="sidebar-content-viewport">
+            <div id="sidebar-list"></div>
+        </div>
+    </div>
+    <div class="timeline-viewport" id="main-scroll">
+        <div class="timeline-header">
+            <div id="header-top" class="header-row" style="background:var(--header-dark);"></div>
+            <div id="header-bottom" class="header-row"></div>
+        </div>
+        <div class="grid" id="main-grid">
+            <div id="grid-bg" class="grid-background"></div>
+            <div id="today-line"></div>
+            <div id="grid-content"></div>
+        </div>
+    </div>
+</div>
+
+<div id="universalModal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="modalTitle" style="margin-top:0;">Bearbeiten</h3>
+        
+        <label id="labelTitle">Bezeichnung / Name</label>
+        <input type="text" id="fieldTitle" placeholder="Bezeichnung">
+        
+        <div id="einsatzFields" style="display:none;">
+            <label>Dauer (Tage)</label>
+            <input type="number" id="fieldDuration" min="1" placeholder="1">
+            
+            <label>Farbe</label>
+            <input type="color" id="fieldColor" style="height:40px; width:100%; border:none; padding:0; margin-bottom:15px;">
+            
+            <label id="wrapVacation" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer;">
+                <input type="checkbox" id="fieldIsVacation" style="width:auto; margin:0;"> Ist Urlaub?
+            </label>
+            <label id="wrapRented" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer; margin-top:5px;">
+                <input type="checkbox" id="fieldIsRentedTimeline" style="width:auto; margin:0;"> Extern verliehen?
+            </label>
+        </div>
+
+        <div id="monteurFields" style="display:none;">
+            <label>Urlaubstage pro Jahr</label>
+            <input type="number" id="fieldVacation" min="0" placeholder="z.B. 30">
+            
+            <label>Eingestellt von</label>
+            <input type="date" id="fieldEmpStart">
+            
+            <label>Eingestellt bis</label>
+            <input type="date" id="fieldEmpEnd">
+        </div>
+        
+        <div id="resourceFields" style="display:none;">
+            <label>Generell verliehen an (leer lassen, wenn auf dem Hof):</label>
+            <input type="text" id="fieldRentedTo" placeholder="z.B. Müller Bau GmbH">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+            <button class="btn btn-danger" onclick="deleteCurrentItem()">Löschen</button>
+            <button class="btn" onclick="closeModal()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveModal()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentYear = 2026;
+let dayWidth = 100;
+let totalDays = 365;
+let startDate = new Date(currentYear, 0, 1);
+const today = new Date();
+let activeRowOffsets = []; 
+let editContext = { type: null, id: null, gId: null };
+
+let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
+    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
+    resources: [{id:'r1', name:'Minibagger 1.5t', rentedTo:''}],
+    einsaetze:[]
+};
+
+// Update legacy state
+if(!state.resources) state.resources = [];
+
+function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
+
+const mainScroll = document.getElementById('main-scroll');
+const sidebarList = document.getElementById('sidebar-list');
+mainScroll.onscroll = () => window.requestAnimationFrame(() => sidebarList.style.transform = `translateY(-${mainScroll.scrollTop}px)`);
+
+function changeYearBy(delta) { currentYear += delta; updateYearBase(); render(); }
+function updateYearBase() {
+    document.getElementById('year-label').innerText = currentYear;
+    startDate = new Date(currentYear, 0, 1);
+    totalDays = ((currentYear % 4 === 0 && currentYear % 100 !== 0) || currentYear % 400 === 0) ? 366 : 365;
+}
+
+function getMonteur(mId) {
+    for(let g of state.groups) {
+        let m = g.monteure.find(x => x.id === mId);
+        if(m) return m;
+    }
+    return null;
+}
+
+function getResource(rId) {
+    return state.resources.find(x => x.id === rId) || null;
+}
+
+function getDayOffset(dateStr) {
+    if(!dateStr) return null;
+    let d = new Date(dateStr); d.setHours(0,0,0,0);
+    return Math.round((d - new Date(currentYear, 0, 1)) / 86400000);
+}
+
+function isPlacementValid(mId, startIdx, durationIdx) {
+    let m = getMonteur(mId);
+    if(!m) return {valid: true}; // If it's a machine, dates are always valid
+    
+    let eS = getDayOffset(m.empStart);
+    let eE = getDayOffset(m.empEnd);
+    
+    if(eS !== null && (startIdx + durationIdx - 1) < eS) return { valid: false, msg: "Einsatz liegt vor dem Einstellungsdatum!" };
+    if(eS !== null && startIdx < eS) return { valid: false, msg: "Einsatz beginnt vor dem Einstellungsdatum!" };
+    if(eE !== null && startIdx > eE) return { valid: false, msg: "Einsatz liegt nach dem Austrittsdatum!" };
+    if(eE !== null && (startIdx + durationIdx - 1) > eE) return { valid: false, msg: "Einsatz endet nach dem Austrittsdatum!" };
+    
+    return { valid: true };
+}
+
+function checkVacationLimit(mId, eId, requestedDuration) {
+    let m = getMonteur(mId);
+    if(!m) return {valid: true}; // Machines don't have vacation
+    let max = m.vacationDays !== undefined ? parseInt(m.vacationDays) : 30;
+    let used = 0;
+    state.einsaetze.forEach(e => {
+        if(e.mId === mId && e.isVacation && e.id !== eId && e.year === currentYear) {
+            used += parseInt(e.duration);
+        }
+    });
+    if(used + parseInt(requestedDuration) > max) {
+        return { valid: false, msg: `Urlaub abgelehnt: Mitarbeiter hat nur ${max} Tage im Jahr (${used} Tage sind bereits verplant).` };
+    }
+    return { valid: true };
+}
+
+function render(){
+    const topRow=document.getElementById('header-top');
+    const bottomRow=document.getElementById('header-bottom');
+    topRow.innerHTML=''; bottomRow.innerHTML='';
+    const width=totalDays*dayWidth;
+    topRow.style.width=width+'px'; bottomRow.style.width=width+'px';
+
+    let i=0;
+    while(i<totalDays){
+        let d=new Date(startDate); d.setDate(startDate.getDate()+i);
+        let daysInMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+        let span = daysInMonth - d.getDate() + 1;
+        if(i+span>totalDays) span=totalDays-i;
+        addCell(topRow,span, (dayWidth < 45 ? d.toLocaleDateString('de-DE',{month:'short'}) : d.toLocaleDateString('de-DE',{month:'long',year:'numeric'})));
+        i+=span;
+    }
+
+    if(dayWidth>=60){
+        for(let j=0;j<totalDays;j++){
+            let d=new Date(startDate); d.setDate(startDate.getDate()+j);
+            addCell(bottomRow,1,d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}), d.toDateString()===today.toDateString() && currentYear === today.getFullYear());
+        }
+    } else {
+        let j2=0;
+        while(j2<totalDays){
+            let d=new Date(startDate); d.setDate(startDate.getDate()+j2);
+            let span=7-((d.getDay()+6)%7);
+            if(j2+span>totalDays) span=totalDays-j2;
+            addCell(bottomRow,span,"KW "+getWeek(d), (today.getFullYear() === currentYear && today >= d && today < new Date(d.getTime() + span*86400000)));
+            j2+=span;
+        }
+    }
+
+    const bg=document.getElementById('grid-bg');
+    bg.innerHTML=''; bg.style.width=width+'px';
+    for(let k=0;k<totalDays;k++){
+        let d=new Date(startDate); d.setDate(startDate.getDate()+k);
+        const div=document.createElement('div');
+        div.className='bg-day'+(d.getDay()===0||d.getDay()===6?' bg-weekend':'');
+        div.style.width=dayWidth+'px';
+        bg.appendChild(div);
+    }
+
+    const sidebar=document.getElementById('sidebar-list');
+    const grid=document.getElementById('grid-content');
+    sidebar.innerHTML=''; grid.innerHTML='';
+    let currentY=0;
+    activeRowOffsets = [];
+
+    // Personal Rendern
+    state.groups.forEach(g=>{
+        const gSide=document.createElement('div');
+        gSide.className='row-group sidebar-item';
+        gSide.innerHTML=`<span>${g.collapsed?'▶':'▼'} ${g.name}</span><div style="display:flex"><span class="action-btn" onclick="addMonteur(event,'${g.id}')">+</span></div>`;
+        gSide.onclick=e=>{ if(!e.target.classList.contains('action-btn')){ g.collapsed=!g.collapsed; saveState(); render(); } };
+        gSide.ondblclick=e=>{ e.stopPropagation(); openEditModal('group', g); };
+        
+        gSide.ondragover = e => { e.preventDefault(); gSide.classList.add('drag-over'); };
+        gSide.ondragleave = e => gSide.classList.remove('drag-over');
+        gSide.ondrop = e => {
+            e.preventDefault(); gSide.classList.remove('drag-over');
+            try {
+                let data = JSON.parse(e.dataTransfer.getData('text'));
+                if(data.gId && data.gId !== g.id) {
+                    let oldG = state.groups.find(x => x.id === data.gId);
+                    let m = oldG.monteure.splice(oldG.monteure.findIndex(x => x.id === data.mId), 1)[0];
+                    g.monteure.push(m);
+                    saveState(); render();
+                }
+            } catch(err) {}
+        };
+
+        sidebar.appendChild(gSide);
+        
+        const gGrid=document.createElement('div');
+        gGrid.className='row-group'; gGrid.style.width=width+'px';
+        grid.appendChild(gGrid);
+        currentY+=38;
+
+        if(!g.collapsed){
+            g.monteure.forEach(m=>{
+                const mSide=document.createElement('div');
+                mSide.className='sidebar-monteur sidebar-item';
+                mSide.innerHTML=`<span style="width:100%">${m.name}</span>`;
+                mSide.ondblclick=e=>{ e.stopPropagation(); openEditModal('monteur', m, g.id); };
+                
+                mSide.setAttribute('draggable', 'true');
+                mSide.ondragstart = e => { e.dataTransfer.setData('text', JSON.stringify({ mId: m.id, gId: g.id })); setTimeout(() => mSide.style.opacity = '0.5', 0); };
+                mSide.ondragend = e => { mSide.style.opacity = '1'; };
+
+                sidebar.appendChild(mSide);
+
+                const mGrid=document.createElement('div');
+                mGrid.className='row-monteur'; mGrid.style.width=width+'px';
+                mGrid.onclick = e => gridClick(e, m.id);
+                grid.appendChild(mGrid);
+                activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: m.id });
+
+                let eS = getDayOffset(m.empStart); let eE = getDayOffset(m.empEnd);
+                if(eS !== null && eS > 0) {
+                    let w = Math.min(eS, totalDays) * dayWidth;
+                    let ooo = document.createElement('div');
+                    ooo.className = 'out-of-office'; ooo.style.left = '0px'; ooo.style.width = w + 'px';
+                    mGrid.appendChild(ooo);
+                }
+                if(eE !== null && eE < totalDays - 1) {
+                    let left = Math.max(0, eE + 1) * dayWidth;
+                    let w = (totalDays - Math.max(0, eE + 1)) * dayWidth;
+                    let ooo = document.createElement('div');
+                    ooo.className = 'out-of-office'; ooo.style.left = left + 'px'; ooo.style.width = w + 'px';
+                    mGrid.appendChild(ooo);
+                }
+
+                renderTasksForId(m.id, mGrid, grid, currentY);
+                currentY+=50;
+            });
+        }
+    });
+
+    // Maschinen & Geräte Rendern
+    if(state.resources.length > 0) {
+        const resSide = document.createElement('div');
+        resSide.className = 'row-group sidebar-item';
+        resSide.style.backgroundColor = '#fff3e0';
+        resSide.innerHTML = `<span>⚙️ Geräte & Maschinen</span>`;
+        sidebar.appendChild(resSide);
+
+        const resGrid = document.createElement('div');
+        resGrid.className = 'row-group'; resGrid.style.width = width + 'px';
+        grid.appendChild(resGrid);
+        currentY += 38;
+
+        state.resources.forEach(res => {
+            const rSide = document.createElement('div');
+            rSide.className = 'sidebar-monteur sidebar-item';
+            rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
+                              (res.rentedTo ? `<span style="font-size:10px; color:#e65100; font-weight:bold; width:100%; display:block; margin-top:2px;">↳ Verliehen an: ${res.rentedTo}</span>` : '');
+            rSide.ondblclick = e => { e.stopPropagation(); openEditModal('resource', res); };
+            sidebar.appendChild(rSide);
+
+            const rGrid = document.createElement('div');
+            rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
+            rGrid.onclick = e => gridClick(e, res.id);
+            grid.appendChild(rGrid);
+            activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
+
+            renderTasksForId(res.id, rGrid, grid, currentY);
+            currentY += 50;
+        });
+    }
+
+    updateTodayLine();
+    document.getElementById('zoom-info').innerText=`Zoom: ${Math.round(dayWidth)}px`;
+}
+
+function renderTasksForId(mId, rowEl, grid, yPos) {
+    state.einsaetze.filter(e => e.mId === mId && e.year === currentYear).forEach(e => {
+        const bar=document.createElement('div');
+        bar.className='bar' + (e.isVacation ? ' is-vacation' : '') + (e.isRented ? ' is-rented' : '');
+        bar.style.left=(e.start*dayWidth + 1)+'px';
+        bar.style.top=(yPos)+'px';
+        bar.style.width=(e.duration*dayWidth - 2)+'px';
+        if(!e.isRented) bar.style.backgroundColor = e.color || '#4285f4';
+        
+        bar.innerHTML=`<div class="bar-content"><strong>${e.title}</strong></div><div class="resizer"></div>`;
+        bar.addEventListener('dblclick', (ev) => { ev.stopPropagation(); openEditModal('einsatz', e); });
+        bar.querySelector('.resizer').onmousedown=ev=>initResize(ev,e,bar);
+        bar.onmousedown = ev => { if(!ev.target.classList.contains('resizer')) initMove(ev,e,bar); };
+        grid.appendChild(bar);
+    });
+}
+
+function addCell(row,span,text,isToday=false){
+    const div=document.createElement('div'); div.className='header-cell'+(isToday?' is-today':'');
+    div.style.width=(span*dayWidth)+'px'; div.innerText=text; row.appendChild(div);
+}
+
+function initMove(ev, item, bar) {
+    if(ev.button !== 0) return; ev.preventDefault();
+    let moved = false;
+    const startX = ev.clientX; const startY = ev.clientY;
+    const startS = item.start; const originalTop = parseInt(bar.style.top || 0);
+    const originalMId = item.mId;
+    bar.style.zIndex = 1000;
+
+    const move = e => { 
+        moved = true;
+        const newStart = Math.max(0, startS + Math.round((e.clientX - startX) / dayWidth)); 
+        bar.style.left = (newStart * dayWidth + 1) + 'px'; 
+        bar.style.top = (originalTop + (e.clientY - startY)) + 'px';
+        bar.style.opacity = e.ctrlKey ? '0.7' : '1';
+    };
+
+    const up = e => { 
+        window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); 
+        if(!moved) return; 
+        
+        const newStart = Math.max(0, startS + Math.round((e.clientX - startX) / dayWidth));
+        const centerY = (originalTop + (e.clientY - startY)) + 17;
+        let newMId = originalMId;
+        const targetRow = activeRowOffsets.find(r => centerY >= r.top && centerY <= r.bottom);
+        if(targetRow) newMId = targetRow.mId;
+
+        let pCheck = isPlacementValid(newMId, newStart, item.duration);
+        if(!pCheck.valid) { alert(pCheck.msg); render(); return; }
+
+        // Sanitize visual flags when jumping between Humans and Machines
+        let isHuman = getMonteur(newMId) !== null;
+        if(isHuman) item.isRented = false; else item.isVacation = false;
+
+        if (e.ctrlKey) { state.einsaetze.push({ ...item, id: 'e' + Date.now(), start: newStart, mId: newMId }); } 
+        else { item.start = newStart; item.mId = newMId; }
+        saveState(); render(); 
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+}
+
+function initResize(ev,item,bar){
+    ev.stopPropagation(); const startX=ev.clientX; const startD=item.duration;
+    const move=e=>{ item.duration=Math.max(1,startD+Math.round((e.clientX-startX)/dayWidth)); bar.style.width=(item.duration*dayWidth-2)+'px'; };
+    const up=()=>{ 
+        window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); 
+        let pCheck = isPlacementValid(item.mId, item.start, item.duration);
+        if(!pCheck.valid) { alert(pCheck.msg); item.duration = startD; }
+        else if(item.isVacation) {
+            let vCheck = checkVacationLimit(item.mId, item.id, item.duration);
+            if(!vCheck.valid) { alert(vCheck.msg); item.duration = startD; }
+        }
+        saveState(); render(); 
+    };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+}
+
+function zoom(f, mouseX = null){
+    const sc=mainScroll;
+    let focusX = (mouseX !== null) ? (sc.scrollLeft + (mouseX - sc.getBoundingClientRect().left)) : (sc.scrollLeft + sc.clientWidth/2);
+    const dayAtFocus = focusX / dayWidth;
+    dayWidth=Math.max(15,Math.min(400,dayWidth*f)); render();
+    sc.scrollLeft = (dayAtFocus * dayWidth) - (mouseX !== null ? (mouseX - sc.getBoundingClientRect().left) : sc.clientWidth/2);
+}
+
+mainScroll.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY > 0 ? 0.9 : 1.1, e.clientX); } }, { passive: false });
+
+function updateTodayLine(){ 
+    const line = document.getElementById('today-line');
+    if(today.getFullYear() === currentYear) { line.style.display = 'block'; line.style.left=(Math.floor((today-startDate)/86400000)*dayWidth)+'px'; } 
+    else { line.style.display = 'none'; }
+}
+
+function scrollToToday(){ 
+    if(currentYear !== today.getFullYear()) { currentYear = today.getFullYear(); updateYearBase(); render(); }
+    mainScroll.scrollLeft=(Math.floor((today-startDate)/86400000)*dayWidth)-300; 
+}
+
+function openEditModal(type, item, gId = null) {
+    editContext = { type, id: item.id, gId };
+    document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
+    document.getElementById('labelTitle').innerText = type === 'resource' ? 'Maschinen-Name' : 'Bezeichnung / Name';
+    document.getElementById('fieldTitle').value = item.name || item.title || '';
+    
+    document.getElementById('einsatzFields').style.display = type === 'einsatz' ? 'block' : 'none';
+    document.getElementById('monteurFields').style.display = type === 'monteur' ? 'block' : 'none';
+    document.getElementById('resourceFields').style.display = type === 'resource' ? 'block' : 'none';
+    
+    if(type==='einsatz'){
+        document.getElementById('fieldDuration').value = item.duration;
+        document.getElementById('fieldColor').value = item.color;
+        
+        let isHuman = getMonteur(item.mId) !== null;
+        document.getElementById('wrapVacation').style.display = isHuman ? 'flex' : 'none';
+        document.getElementById('wrapRented').style.display = isHuman ? 'none' : 'flex';
+        
+        document.getElementById('fieldIsVacation').checked = item.isVacation || false;
+        document.getElementById('fieldIsRentedTimeline').checked = item.isRented || false;
+    } else if(type==='monteur'){
+        document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
+        document.getElementById('fieldEmpStart').value = item.empStart || '';
+        document.getElementById('fieldEmpEnd').value = item.empEnd || '';
+    } else if(type==='resource') {
+        document.getElementById('fieldRentedTo').value = item.rentedTo || '';
+    }
+    document.getElementById('universalModal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('universalModal').style.display = 'none'; }
+
+function saveModal() {
+    const val = document.getElementById('fieldTitle').value;
+    
+    if(editContext.type==='einsatz'){
+        const e = state.einsaetze.find(x=>x.id===editContext.id);
+        const dur = parseInt(document.getElementById('fieldDuration').value) || 1;
+        const isVac = document.getElementById('fieldIsVacation').checked;
+        const isRented = document.getElementById('fieldIsRentedTimeline').checked;
+        
+        let pCheck = isPlacementValid(e.mId, e.start, dur);
+        if(!pCheck.valid) return alert(pCheck.msg);
+        
+        if(isVac) {
+            let vCheck = checkVacationLimit(e.mId, e.id, dur);
+            if(!vCheck.valid) return alert(vCheck.msg);
+        }
+
+        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=isRented;
+    } else if(editContext.type==='group'){
+        state.groups.find(x=>x.id===editContext.id).name=val;
+    } else if(editContext.type==='resource'){
+        const r = state.resources.find(x=>x.id===editContext.id);
+        r.name=val;
+        r.rentedTo=document.getElementById('fieldRentedTo').value;
+    } else {
+        const m = state.groups.find(x=>x.id===editContext.gId).monteure.find(x=>x.id===editContext.id);
+        m.name=val; 
+        m.vacationDays = parseInt(document.getElementById('fieldVacation').value) || 0;
+        m.empStart = document.getElementById('fieldEmpStart').value;
+        m.empEnd = document.getElementById('fieldEmpEnd').value;
+    }
+    saveState(); closeModal(); render();
+}
+
+function deleteCurrentItem() {
+    if(!confirm("Wirklich löschen?")) return;
+    if(editContext.type==='einsatz') state.einsaetze=state.einsaetze.filter(x=>x.id!==editContext.id);
+    else if(editContext.type==='group') state.groups=state.groups.filter(x=>x.id!==editContext.id);
+    else if(editContext.type==='resource') state.resources=state.resources.filter(x=>x.id!==editContext.id);
+    else state.groups.find(x=>x.id===editContext.gId).monteure=state.groups.find(x=>x.id===editContext.gId).monteure.filter(x=>x.id!==editContext.id);
+    saveState(); closeModal(); render();
+}
+
+function gridClick(ev,mId){ 
+    if(ev.target!==ev.currentTarget)return; 
+    const rect=ev.currentTarget.getBoundingClientRect(); 
+    const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
+    
+    let pCheck = isPlacementValid(mId, start, 1);
+    if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
+
+    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false }; 
+    state.einsaetze.push(newItem); saveState(); render(); openEditModal('einsatz', newItem); 
+}
+
+function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }
+function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, empStart:'', empEnd:''}); saveState(); render(); } }
+function addResource(){ const n=prompt("Maschinen- / Gerätename:"); if(n) { state.resources.push({id:'r'+Date.now(),name:n, rentedTo:''}); saveState(); render(); } }
+function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+
+updateYearBase(); render(); setTimeout(scrollToToday, 200);
+</script>
+</body>
+</html>
