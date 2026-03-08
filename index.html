@@ -60,10 +60,15 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
 /* Bars */
 .bar{ position:absolute; height:34px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:11px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top: 8px; user-select: none; }
-.bar.is-vacation { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
+.bar.is-absence { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
+.bar.abs-urlaub{ background-color:#5e35b1 !important; }
+.bar.abs-kindkrank{ background-color:#8e24aa !important; }
+.bar.abs-krank{ background-color:#c62828 !important; }
+.bar.abs-fortbildung{ background-color:#00897b !important; }
 .bar.is-rented { background-color: #ff9800 !important; background-image: repeating-linear-gradient(-45deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 10px, transparent 10px, transparent 20px) !important; color: #fff !important; }
 .bar-content{ flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 .resizer{ width:10px; height:100%; position:absolute; right:0; top:0; cursor:col-resize; z-index: 12; }
+.hours-chip{ position:absolute; top:2px; left:2px; font-size:10px; line-height:1; background:rgba(26,115,232,0.12); color:#0b57d0; border:1px solid rgba(26,115,232,0.25); border-radius:3px; padding:2px 3px; z-index:6; cursor:pointer; }
 
 /* Modal */
 .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:2000; }
@@ -91,8 +96,10 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     <select id="status-filter" onchange="render()">
         <option value="all">Alle Einträge</option>
         <option value="normal">Normale Einsätze</option>
-        <option value="vacation">Nur Urlaub</option>
-        <option value="rented">Nur verliehen</option>
+        <option value="absence">Alle Abwesenheiten</option>
+        <option value="urlaub">Nur Urlaub</option>
+        <option value="kindkrank">Nur Kindkrank</option>
+        <option value="krank">Nur Krank</option>
     </select>
     <button class="btn" onclick="zoom(1.2)">🔍 +</button>
     <button class="btn" onclick="zoom(0.8)">🔍 -</button>
@@ -131,12 +138,27 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <label>Dauer (Tage)</label>
             <input type="number" id="fieldDuration" min="1" placeholder="1">
             
-            <label>Farbe</label>
-            <input type="color" id="fieldColor" style="height:40px; width:100%; border:none; padding:0; margin-bottom:15px;">
+            <label>Farbe (Preset)</label>
+            <select id="fieldColor">
+                <option value="#4285f4">Blau</option>
+                <option value="#34a853">Grün</option>
+                <option value="#fbbc05">Gelb</option>
+                <option value="#ea4335">Rot</option>
+                <option value="#9c27b0">Lila</option>
+                <option value="#00acc1">Türkis</option>
+                <option value="#6d4c41">Braun</option>
+            </select>
             
-            <label id="wrapVacation" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer;">
-                <input type="checkbox" id="fieldIsVacation" style="width:auto; margin:0;"> Ist Urlaub?
-            </label>
+            <div id="wrapAbsence" style="display:none; margin-top:5px; flex-direction:column;">
+                <label>Abwesenheit</label>
+                <select id="fieldAbsenceType">
+                    <option value="none">Keine (normaler Einsatz)</option>
+                    <option value="urlaub">Urlaub</option>
+                    <option value="kindkrank">Kindkrank</option>
+                    <option value="krank">Krank</option>
+                    <option value="fortbildung">Fortbildung</option>
+                </select>
+            </div>
             <div id="wrapLinkedTask" style="display:none; margin-top:10px; flex-direction:column;">
                 <label>Mitarbeiter-Aufgabe zuordnen</label>
                 <select id="fieldLinkedTask"></select>
@@ -180,7 +202,8 @@ let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
     resourceGroups:[{id:'rg1',name:'Geräte Hof',collapsed:false}],
     resources: [{id:'r1', groupId:'rg1', name:'Minibagger 1.5t', rentedTo:''}],
-    einsaetze:[]
+    einsaetze:[],
+    workHours:{}
 };
 
 // Update legacy state
@@ -189,6 +212,11 @@ if(!state.resourceGroups || state.resourceGroups.length === 0) {
     state.resourceGroups = [{id:'rg1', name:'Geräte Hof', collapsed:false}];
 }
 state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
+if(!state.workHours) state.workHours = {};
+state.einsaetze.forEach(e => {
+    if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
+    if(e.isVacation !== undefined) delete e.isVacation;
+});
 
 function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
 
@@ -290,7 +318,7 @@ function applyLinkedTaskToResourceItem(item, linkedTaskId) {
     item.title = linked.title;
     item.color = linked.color || item.color || '#4285f4';
     item.linkedTaskId = linked.id;
-    item.isVacation = false;
+    item.absenceType = "none";
     item.isRented = false;
 
     const check = validatePlacement(item.mId, item.start, item.duration, item.id);
@@ -342,6 +370,43 @@ function getTaskSearchBlob(entry) {
     return blob;
 }
 
+
+function getWorkHoursKey(mId, dayIdx) {
+    return `${currentYear}-${mId}-${dayIdx}`;
+}
+
+function setWorkHoursForMonteur(mId, dayIdx) {
+    const date = new Date(startDate); date.setDate(startDate.getDate()+dayIdx);
+    const key = getWorkHoursKey(mId, dayIdx);
+    const existing = state.workHours[key] !== undefined ? state.workHours[key] : '';
+    const input = prompt(`Arbeitsstunden für ${date.toLocaleDateString('de-DE')} (${getMonteur(mId)?.name || ''})`, existing);
+    if(input === null) return;
+    const val = parseFloat(String(input).replace(',', '.'));
+    if(Number.isNaN(val) || val < 0) { delete state.workHours[key]; }
+    else state.workHours[key] = val;
+    saveState(); render();
+}
+
+function renderWorkHoursForMonteur(mId, rowEl) {
+    Object.entries(state.workHours).forEach(([key, hours]) => {
+        const [year, mmId, day] = key.split('-');
+        if(parseInt(year)!==currentYear || mmId!==mId) return;
+        const dayIdx = parseInt(day);
+        if(Number.isNaN(dayIdx) || dayIdx < 0 || dayIdx >= totalDays) return;
+        const chip = document.createElement('div');
+        chip.className = 'hours-chip';
+        chip.style.left = (dayIdx * dayWidth + 3) + 'px';
+        chip.textContent = `${hours}h`;
+        chip.title = 'Alt+Klick auf Zeile zum Bearbeiten';
+        chip.onclick = ev => { ev.stopPropagation(); setWorkHoursForMonteur(mId, dayIdx); };
+        rowEl.appendChild(chip);
+    });
+}
+
+function isAbsence(entry) {
+    return !!entry.absenceType && entry.absenceType !== 'none';
+}
+
 function isPlacementValid(mId, startIdx, durationIdx) {
     let m = getMonteur(mId);
     if(!m) return {valid: true}; // If it's a machine, dates are always valid
@@ -388,9 +453,11 @@ function matchesOptionalSearch(entityText, searchTerm) {
 }
 
 function matchesStatusFilter(entry, statusFilter) {
-    if(statusFilter === 'vacation') return !!entry.isVacation;
-    if(statusFilter === 'rented') return !!entry.isRented;
-    if(statusFilter === 'normal') return !entry.isVacation && !entry.isRented;
+    if(statusFilter === 'absence') return isAbsence(entry);
+    if(statusFilter === 'urlaub') return entry.absenceType === 'urlaub';
+    if(statusFilter === 'kindkrank') return entry.absenceType === 'kindkrank';
+    if(statusFilter === 'krank') return entry.absenceType === 'krank';
+    if(statusFilter === 'normal') return !isAbsence(entry) && !entry.isRented;
     return true;
 }
 
@@ -400,7 +467,7 @@ function checkVacationLimit(mId, eId, requestedDuration) {
     let max = m.vacationDays !== undefined ? parseInt(m.vacationDays) : 30;
     let used = 0;
     state.einsaetze.forEach(e => {
-        if(e.mId === mId && e.isVacation && e.id !== eId && e.year === currentYear) {
+        if(e.mId === mId && e.absenceType === 'urlaub' && e.id !== eId && e.year === currentYear) {
             used += parseInt(e.duration);
         }
     });
@@ -524,6 +591,7 @@ function render(){
                 mGrid.onclick = e => gridClick(e, m.id);
                 grid.appendChild(mGrid);
                 activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: m.id });
+                renderWorkHoursForMonteur(m.id, mGrid);
 
                 let eS = getDayOffset(m.empStart); let eE = getDayOffset(m.empEnd);
                 if(eS !== null && eS > 0) {
@@ -631,7 +699,7 @@ function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter 
     .filter(e => matchesStatusFilter(e, statusFilter) && matchesSearch(getTaskSearchBlob(e), searchTerm))
     .forEach(e => {
         const bar=document.createElement('div');
-        bar.className='bar' + (e.isVacation ? ' is-vacation' : '') + (e.isRented ? ' is-rented' : '');
+        bar.className='bar' + (isAbsence(e) ? ' is-absence abs-' + e.absenceType : '') + (e.isRented ? ' is-rented' : '');
         bar.style.left=(e.start*dayWidth + 1)+'px';
         bar.style.top=(yPos)+'px';
         bar.style.width=(e.duration*dayWidth - 2)+'px';
@@ -696,7 +764,7 @@ function initMove(ev, item, bar) {
                 start: item.start,
                 duration: item.duration,
                 color: item.color || '#4285f4',
-                isVacation: false,
+                absenceType: 'none',
                 isRented: false,
                 linkedTaskId: item.id
             };
@@ -715,7 +783,7 @@ function initMove(ev, item, bar) {
         }
 
         // Sanitize visual flags when jumping between Humans and Machines
-        if(targetIsHuman) item.isRented = false; else item.isVacation = false;
+        if(targetIsHuman) item.isRented = false; else item.absenceType = 'none';
 
         if (e.ctrlKey) {
             const clonedItem = { ...item, id: 'e' + Date.now(), start: newStart, mId: newMId, linkedTaskId: null };
@@ -740,7 +808,7 @@ function initResize(ev,item,bar){
         if(!pCheck.valid) { alert(pCheck.msg); item.duration = startD; }
         else {
             sanitizeLinkedTask(item);
-            if(item.isVacation) {
+            if(item.absenceType === 'urlaub') {
             let vCheck = checkVacationLimit(item.mId, item.id, item.duration);
             if(!vCheck.valid) { alert(vCheck.msg); item.duration = startD; }
             }
@@ -780,7 +848,7 @@ function openEditModal(type, item, gId = null) {
     document.getElementById('einsatzFields').style.display = type === 'einsatz' ? 'block' : 'none';
     document.getElementById('monteurFields').style.display = type === 'monteur' ? 'block' : 'none';
     document.getElementById('resourceFields').style.display = type === 'resource' ? 'block' : 'none';
-    if(type !== 'einsatz') document.getElementById('wrapLinkedTask').style.display = 'none';
+    if(type !== 'einsatz') { document.getElementById('wrapLinkedTask').style.display = 'none'; document.getElementById('wrapAbsence').style.display = 'none'; }
     
     if(type==='einsatz'){
         document.getElementById('fieldDuration').value = item.duration;
@@ -788,7 +856,7 @@ function openEditModal(type, item, gId = null) {
         
         let isHuman = getMonteur(item.mId) !== null;
         const isResource = getResource(item.mId) !== null;
-        document.getElementById('wrapVacation').style.display = isHuman ? 'flex' : 'none';
+        document.getElementById('wrapAbsence').style.display = isHuman ? 'flex' : 'none';
         document.getElementById('wrapLinkedTask').style.display = isResource ? 'flex' : 'none';
 
         const linkedSelect = document.getElementById('fieldLinkedTask');
@@ -803,7 +871,7 @@ function openEditModal(type, item, gId = null) {
             });
         }
 
-        document.getElementById('fieldIsVacation').checked = item.isVacation || false;
+        document.getElementById('fieldAbsenceType').value = item.absenceType || 'none';
         linkedSelect.value = item.linkedTaskId || '';
         linkedSelect.onchange = () => {
             const selectedId = linkedSelect.value || null;
@@ -836,18 +904,18 @@ function saveModal() {
     if(editContext.type==='einsatz'){
         const e = state.einsaetze.find(x=>x.id===editContext.id);
         const dur = parseInt(document.getElementById('fieldDuration').value) || 1;
-        const isVac = document.getElementById('fieldIsVacation').checked;
+        const absenceType = document.getElementById('fieldAbsenceType').value || 'none';
         
         let pCheck = validatePlacement(e.mId, e.start, dur, e.id);
         if(!pCheck.valid) return alert(pCheck.msg);
         
-        if(isVac) {
+        if(absenceType === 'urlaub') {
             let vCheck = checkVacationLimit(e.mId, e.id, dur);
             if(!vCheck.valid) return alert(vCheck.msg);
         }
 
         const linkedTaskId = document.getElementById('fieldLinkedTask').value || null;
-        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=false;
+        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.absenceType=absenceType; e.isRented=false;
         if(getResource(e.mId) && linkedTaskId) {
             if(!applyLinkedTaskToResourceItem(e, linkedTaskId)) return alert('Verknüpfung nicht möglich: Ressource ist in dem Zeitraum bereits belegt.');
         } else {
@@ -891,11 +959,13 @@ function gridClick(ev,mId){
     if(ev.target!==ev.currentTarget)return; 
     const rect=ev.currentTarget.getBoundingClientRect(); 
     const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
+
+    if(ev.altKey && getMonteur(mId)) { setWorkHoursForMonteur(mId, start); return; }
     
     let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
 
-    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false, linkedTaskId: null }; 
+    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', absenceType: 'none', isRented: false, linkedTaskId: null }; 
     state.einsaetze.push(newItem); saveState(); render(); openEditModal('einsatz', newItem); 
 }
 
