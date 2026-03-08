@@ -115,6 +115,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
         <button class="btn" onclick="changeYearBy(1)">❯</button>
     </div>
     <button class="btn" onclick="scrollToToday()">Heute</button>
+    <button class="btn" id="time-mode-btn" onclick="toggleTimeEntryMode()">⏱ Zeitmodus: AUS</button>
     <button class="btn btn-primary" onclick="addTeam()">+ Team</button>
     <button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button>
     <input type="search" id="search-input" placeholder="Suche: Team, Mitarbeiter, Gerät, Einsatz..." oninput="render()">
@@ -275,6 +276,11 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     <input type="number" id="wtBreak" min="0" step="5" value="0">
     <label>Notiz</label>
     <input type="text" id="wtNote" placeholder="z.B. Baustelle A">
+    <div class="admin-actions" style="margin-top:8px;">
+        <button class="btn" onclick="applyWorktimePreset('full')">Preset 8h</button>
+        <button class="btn" onclick="applyWorktimePreset('short')">Preset 7.5h</button>
+        <button class="btn" onclick="applyWorktimePreset('off')">Frei</button>
+    </div>
     <div class="menu-actions">
         <button class="btn" onclick="deleteWorkTimeFromMenu()">Löschen</button>
         <button class="btn btn-primary" onclick="saveWorkTimeFromMenu()">Speichern</button>
@@ -292,6 +298,7 @@ const today = new Date();
 let activeRowOffsets = []; 
 let editContext = { type: null, id: null, gId: null };
 let workTimeContext = { mId: null, dayIdx: null };
+let timeEntryMode = false;
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
@@ -1045,12 +1052,25 @@ function gridClick(ev,mId){
     const rect=ev.currentTarget.getBoundingClientRect(); 
     const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
 
-    
+    if(getMonteur(mId) && timeEntryMode) {
+        openWorkTimeContextMenu(ev, mId, start);
+        return;
+    }
+
     let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
 
     const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', absenceType: 'none', isRented: false, linkedTaskId: null }; 
     state.einsaetze.push(newItem); saveState(); render(); openEditModal('einsatz', newItem); 
+}
+
+function toggleTimeEntryMode(){
+    timeEntryMode = !timeEntryMode;
+    const btn = document.getElementById('time-mode-btn');
+    if(btn){
+        btn.innerText = `⏱ Zeitmodus: ${timeEntryMode ? 'AN' : 'AUS'}`;
+        btn.classList.toggle('btn-primary', timeEntryMode);
+    }
 }
 
 function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }

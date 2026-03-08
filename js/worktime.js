@@ -18,12 +18,39 @@ function calcHoursFromRange(from, to, breakMin) {
     return Math.round((worked / 60) * 100) / 100;
 }
 
+
+function getPreviousWorkRecord(mId, dayIdx) {
+    for(let d=dayIdx-1; d>=0; d--) {
+        const prev = state.workHours[getWorkHoursKey(mId, d)];
+        if(prev && prev.from && prev.to) return prev;
+    }
+    return null;
+}
+
+function applyWorktimePreset(type) {
+    if(type === 'full') {
+        document.getElementById('wtFrom').value = '07:00';
+        document.getElementById('wtTo').value = '15:30';
+        document.getElementById('wtBreak').value = 30;
+    } else if(type === 'short') {
+        document.getElementById('wtFrom').value = '07:00';
+        document.getElementById('wtTo').value = '15:00';
+        document.getElementById('wtBreak').value = 30;
+    } else if(type === 'off') {
+        document.getElementById('wtFrom').value = '';
+        document.getElementById('wtTo').value = '';
+        document.getElementById('wtBreak').value = 0;
+        document.getElementById('wtNote').value = 'Frei';
+    }
+}
+
 function openWorkTimeContextMenu(ev, mId, dayIdx) {
     ev.preventDefault();
     ev.stopPropagation();
     const menu = document.getElementById('worktimeMenu');
     const key = getWorkHoursKey(mId, dayIdx);
-    const current = state.workHours[key] || { from:'', to:'', breakMin:0, hours:0, note:'' };
+    let current = state.workHours[key] || null;
+    if(!current) current = getPreviousWorkRecord(mId, dayIdx) || { from:'', to:'', breakMin:0, hours:0, note:'' };
 
     workTimeContext = { mId, dayIdx };
     document.getElementById('wtFrom').value = current.from || '';
@@ -32,8 +59,8 @@ function openWorkTimeContextMenu(ev, mId, dayIdx) {
     document.getElementById('wtNote').value = current.note || ''; 
 
     menu.style.display = 'block';
-    menu.style.left = Math.min(window.innerWidth - 280, ev.clientX) + 'px';
-    menu.style.top = Math.min(window.innerHeight - 240, ev.clientY) + 'px';
+    menu.style.left = Math.min(window.innerWidth - 300, ev.clientX + 8) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 280, ev.clientY + 8) + 'px';
 }
 
 function closeWorkTimeContextMenu() {
@@ -86,3 +113,12 @@ function renderWorkHoursForMonteur(mId, rowEl) {
         rowEl.appendChild(chip);
     });
 }
+
+document.addEventListener('keydown', (e) => {
+    const menu = document.getElementById('worktimeMenu');
+    if(!menu || menu.style.display !== 'block') return;
+    if(e.key === 'Enter') {
+        e.preventDefault();
+        saveWorkTimeFromMenu();
+    }
+});
