@@ -40,6 +40,21 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .kpi{ border:1px solid #eee; border-radius:6px; padding:8px 10px; background:#fafafa; font-size:12px; }
 
 .app-container{ display:flex; height:100%; min-height:0; overflow:hidden; }
+#view-dispo.view-page.active{ display:flex; flex-direction:column; }
+#view-dispo .app-container{ flex:1; min-height:0; }
+.unplanned-tray{ border-left:1px solid var(--border); background:#f8fafc; padding:10px 10px; width:320px; display:flex; flex-direction:column; gap:8px; transition:width 0.2s ease, padding 0.2s ease; }
+.unplanned-tray.collapsed{ width:46px; padding:10px 6px; }
+.unplanned-head{ display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.unplanned-title{ font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.unplanned-tray.collapsed .unplanned-title{ display:none; }
+.unplanned-list{ display:flex; flex-direction:column; gap:8px; overflow:auto; padding-right:2px; }
+.unplanned-tray.collapsed .unplanned-list{ display:none; }
+.unplanned-card{ border:1px dashed #9aa0a6; background:#fff; border-radius:10px; padding:8px; font-size:12px; cursor:grab; }
+.unplanned-card:active{ cursor:grabbing; }
+.unplanned-card .meta{ color:#5f6368; font-size:11px; margin-top:4px; }
+.unplanned-actions{ display:flex; gap:6px; }
+.unplanned-tray.collapsed .unplanned-actions{ display:none; }
+.unplanned-toggle{ min-width:30px; padding:4px 6px; }
 
 /* Sidebar */
 .sidebar{ width:var(--name-width); flex-shrink:0; border-right:2px solid #ccc; display:flex; flex-direction:column; z-index:500; background:#fff; }
@@ -162,6 +177,69 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <div id="grid-content"></div>
         </div>
     </div>
+    <div id="unplannedTray" class="unplanned-tray">
+        <div class="unplanned-head">
+            <span class="unplanned-title">🅿️ Ungeplante Aufträge</span>
+            <div class="unplanned-actions">
+                <button class="btn" onclick="addUnplannedOrder()">+ Auftrag</button>
+            </div>
+            <button id="unplannedToggleBtn" class="btn unplanned-toggle" onclick="toggleUnplannedTray()" title="Parkleiste ein-/ausklappen">⮜</button>
+        </div>
+        <div id="unplannedList" class="unplanned-list"></div>
+    </div>
+</div>
+</div>
+
+<div id="view-people" class="view-page admin-page">
+    <div class="admin-grid">
+        <div class="admin-card">
+            <h3>Mitarbeiter & Teams</h3>
+            <div class="admin-actions"><button class="btn btn-primary" onclick="addTeam()">+ Team</button></div>
+            <div id="people-admin-list"></div>
+        </div>
+        <div class="admin-card">
+            <h3>Ressourcen & Gruppen</h3>
+            <div class="admin-actions"><button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button></div>
+            <div id="resource-admin-list"></div>
+        </div>
+    </div>
+    <div class="admin-card" style="margin-top:16px;">
+        <h3>Daten (JSON)</h3>
+        <div class="admin-actions">
+            <button class="btn" onclick="refreshStateJson()">Aktualisieren</button>
+            <button class="btn" onclick="applyStateJson()">JSON anwenden</button>
+        </div>
+        <textarea id="state-json" style="width:100%; min-height:180px; font-family:monospace;"></textarea>
+    </div>
+</div>
+
+<div id="view-tasks" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Aufgabenübersicht (Jahr <span id="tasks-year-label"></span>)</h3>
+        <div id="tasks-admin-list"></div>
+    </div>
+</div>
+
+<div id="view-time" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Zeiterfassung (Von/Bis/Pause)</h3>
+        <div class="admin-actions">
+            <label for="time-month-filter" style="font-size:12px; color:#555;">Monat:</label>
+            <select id="time-month-filter" onchange="renderTimeAdmin()">
+                <option value="all">Ganzes Jahr</option>
+                <option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option>
+                <option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
+            </select>
+            <label for="time-employee-filter" style="font-size:12px; color:#555;">Mitarbeiter:</label>
+            <select id="time-employee-filter" onchange="renderTimeAdmin()">
+                <option value="all">Alle Mitarbeiter</option>
+            </select>
+            <button class="btn" onclick="exportTimeCsv()">CSV Export</button>
+        </div>
+        <div id="time-admin-summary"></div>
+        <div id="time-admin-list"></div>
+    </div>
 </div>
 </div>
 
@@ -260,6 +338,12 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
                 <div class="modern-section-title">👤 Vertrags- & Abwesenheitsdaten</div>
                 <div class="modern-grid">
                     <div class="full">
+                        <label style="text-transform:none; letter-spacing:0;">
+                            <input type="checkbox" id="fieldIsSubcontractor" onchange="toggleSubcontractorFields()" style="width:auto; margin-right:8px;">
+                            Subunternehmer
+                        </label>
+                    </div>
+                    <div class="full" id="wrapVacationField">
                         <label>Urlaubstage pro Jahr</label>
                         <input type="number" id="fieldVacation" min="0" placeholder="z.B. 30">
                     </div>
@@ -300,6 +384,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
             <button class="btn btn-danger" onclick="deleteCurrentItem()">Löschen</button>
+            <button id="parkTaskBtn" class="btn" style="display:none;" onclick="parkCurrentItem()">In Ungeplant parken</button>
             <button class="btn" onclick="closeModal()">Abbrechen</button>
             <button class="btn btn-primary" onclick="saveModal()">Speichern</button>
         </div>
@@ -343,13 +428,15 @@ let editContext = { type: null, id: null, gId: null };
 const TASK_BAR_VERTICAL_OFFSET = 18;
 let workTimeContext = { mId: null, dayIdx: null };
 let timeEntryMode = false;
+let unplannedTrayCollapsed = false;
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
-    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart: '', empEnd: ''}]}],
+    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart: '', empEnd: '', isSubcontractor:false}]}],
     resourceGroups:[{id:'rg1',name:'Geräte Hof',collapsed:false}],
     resources: [{id:'r1', groupId:'rg1', name:'Minibagger 1.5t', rentedTo:''}],
     einsaetze:[],
-    workHours:{}
+    workHours:{},
+    unplannedOrders:[]
 };
 
 function normalizeState() {
@@ -359,6 +446,7 @@ function normalizeState() {
     }
     state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
     if(!state.workHours) state.workHours = {};
+    if(!Array.isArray(state.unplannedOrders)) state.unplannedOrders = [];
     state.einsaetze.forEach(e => {
         if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
         if(e.isVacation !== undefined) delete e.isVacation;
@@ -367,6 +455,7 @@ function normalizeState() {
         if(!m.workStart) m.workStart = '07:00';
         if(!m.workEnd) m.workEnd = '15:30';
         if(m.defaultBreak === undefined || m.defaultBreak === null) m.defaultBreak = 30;
+        if(m.isSubcontractor === undefined) m.isSubcontractor = false;
     }));
     Object.keys(state.workHours).forEach(key => {
         const val = state.workHours[key];
@@ -614,6 +703,7 @@ function matchesStatusFilter(entry, statusFilter) {
 function checkVacationLimit(mId, eId, requestedDuration) {
     let m = getMonteur(mId);
     if(!m) return {valid: true}; // Machines don't have vacation
+    if(m.isSubcontractor) return { valid: true };
     let max = m.vacationDays !== undefined ? parseInt(m.vacationDays) : 30;
     let used = 0;
     state.einsaetze.forEach(e => {
@@ -739,6 +829,15 @@ function render(){
                 const mGrid=document.createElement('div');
                 mGrid.className='row-monteur'; mGrid.style.width=width+'px';
                 mGrid.onclick = e => gridClick(e, m.id);
+                mGrid.ondragover = e => { if(e.dataTransfer.types.includes('text/unplanned')) e.preventDefault(); };
+                mGrid.ondrop = e => {
+                    const uId = e.dataTransfer.getData('text/unplanned');
+                    if(!uId) return;
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const start = Math.max(0, Math.floor((e.clientX-rect.left)/dayWidth));
+                    scheduleUnplannedOrder(uId, m.id, start);
+                };
                 mGrid.oncontextmenu = e => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const dayIdx = Math.floor((e.clientX-rect.left)/dayWidth);
@@ -835,6 +934,15 @@ function render(){
                     const rGrid = document.createElement('div');
                     rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
                     rGrid.onclick = e => gridClick(e, res.id);
+                    rGrid.ondragover = e => { if(e.dataTransfer.types.includes('text/unplanned')) e.preventDefault(); };
+                    rGrid.ondrop = e => {
+                        const uId = e.dataTransfer.getData('text/unplanned');
+                        if(!uId) return;
+                        e.preventDefault();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const start = Math.max(0, Math.floor((e.clientX-rect.left)/dayWidth));
+                        scheduleUnplannedOrder(uId, res.id, start);
+                    };
                     grid.appendChild(rGrid);
                     activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
 
@@ -850,6 +958,8 @@ function render(){
     renderPeopleAdmin();
     renderTasksAdmin();
     renderTimeAdmin();
+    renderUnplannedTray();
+    applyUnplannedTrayState();
 }
 
 function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
@@ -997,6 +1107,13 @@ function scrollToToday(){
     mainScroll.scrollLeft=(Math.floor((today-startDate)/86400000)*dayWidth)-300; 
 }
 
+function toggleSubcontractorFields(){
+    const cb = document.getElementById('fieldIsSubcontractor');
+    const wrap = document.getElementById('wrapVacationField');
+    if(!cb || !wrap) return;
+    wrap.style.display = cb.checked ? 'none' : 'block';
+}
+
 function openEditModal(type, item, gId = null) {
     editContext = { type, id: item.id, gId };
     document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resourceGroup'?'Gerätegruppe':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
@@ -1007,6 +1124,8 @@ function openEditModal(type, item, gId = null) {
     document.getElementById('monteurFields').style.display = type === 'monteur' ? 'block' : 'none';
     document.getElementById('resourceFields').style.display = type === 'resource' ? 'block' : 'none';
     if(type !== 'einsatz') { document.getElementById('wrapLinkedTask').style.display = 'none'; document.getElementById('wrapAbsence').style.display = 'none'; }
+    const parkBtn = document.getElementById('parkTaskBtn');
+    if(parkBtn) parkBtn.style.display = type === 'einsatz' ? 'inline-block' : 'none';
     
     if(type==='einsatz'){
         document.getElementById('fieldDuration').value = item.duration;
@@ -1045,7 +1164,9 @@ function openEditModal(type, item, gId = null) {
             document.getElementById('fieldDuration').value = preview.duration;
         };
     } else if(type==='monteur'){
+        document.getElementById('fieldIsSubcontractor').checked = !!item.isSubcontractor;
         document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
+        toggleSubcontractorFields();
         document.getElementById('fieldWorkStart').value = item.workStart || '07:00';
         document.getElementById('fieldWorkEnd').value = item.workEnd || '15:30';
         document.getElementById('fieldDefaultBreak').value = item.defaultBreak !== undefined ? item.defaultBreak : 30;
@@ -1053,6 +1174,10 @@ function openEditModal(type, item, gId = null) {
         document.getElementById('fieldEmpEnd').value = item.empEnd || '';
     } else if(type==='resource') {
         document.getElementById('fieldRentedTo').value = item.rentedTo || '';
+    } else {
+        const cb = document.getElementById('fieldIsSubcontractor');
+        if(cb) cb.checked = false;
+        toggleSubcontractorFields();
     }
     document.getElementById('universalModal').style.display = 'flex';
 }
@@ -1066,6 +1191,8 @@ function saveModal() {
         const e = state.einsaetze.find(x=>x.id===editContext.id);
         const dur = parseInt(document.getElementById('fieldDuration').value) || 1;
         const absenceType = document.getElementById('fieldAbsenceType').value || 'none';
+        const targetMonteur = getMonteur(e.mId);
+        if(absenceType === 'urlaub' && targetMonteur && targetMonteur.isSubcontractor) return alert('Für Subunternehmer ist keine Urlaubsfunktion aktiv.');
         
         let pCheck = validatePlacement(e.mId, e.start, dur, e.id);
         if(!pCheck.valid) return alert(pCheck.msg);
@@ -1094,7 +1221,8 @@ function saveModal() {
     } else {
         const m = state.groups.find(x=>x.id===editContext.gId).monteure.find(x=>x.id===editContext.id);
         m.name=val; 
-        m.vacationDays = parseInt(document.getElementById('fieldVacation').value) || 0;
+        m.isSubcontractor = !!document.getElementById('fieldIsSubcontractor').checked;
+        m.vacationDays = m.isSubcontractor ? 0 : (parseInt(document.getElementById('fieldVacation').value) || 0);
         m.workStart = document.getElementById('fieldWorkStart').value || '07:00';
         m.workEnd = document.getElementById('fieldWorkEnd').value || '15:30';
         m.defaultBreak = parseInt(document.getElementById('fieldDefaultBreak').value) || 0;
@@ -1117,6 +1245,85 @@ function deleteCurrentItem() {
     else if(editContext.type==='resource') state.resources=state.resources.filter(x=>x.id!==editContext.id);
     else state.groups.find(x=>x.id===editContext.gId).monteure=state.groups.find(x=>x.id===editContext.gId).monteure.filter(x=>x.id!==editContext.id);
     saveState(); closeModal(); render();
+}
+
+
+function toggleUnplannedTray(){
+    unplannedTrayCollapsed = !unplannedTrayCollapsed;
+    applyUnplannedTrayState();
+}
+
+function applyUnplannedTrayState(){
+    const tray = document.getElementById('unplannedTray');
+    const btn = document.getElementById('unplannedToggleBtn');
+    if(!tray || !btn) return;
+    tray.classList.toggle('collapsed', unplannedTrayCollapsed);
+    btn.textContent = unplannedTrayCollapsed ? '⮞' : '⮜';
+}
+
+function addUnplannedOrder(){
+    const title = prompt('Auftragstitel für Parkzone:');
+    if(!title) return;
+    state.unplannedOrders.push({
+        id:'u'+Date.now(),
+        year: currentYear,
+        title,
+        duration:1,
+        color:'#4285f4',
+        absenceType:'none'
+    });
+    saveState(); renderUnplannedTray();
+}
+
+function parkCurrentItem(){
+    if(editContext.type!=='einsatz') return;
+    const e = state.einsaetze.find(x=>x.id===editContext.id);
+    if(!e) return;
+    state.unplannedOrders.push({
+        id:'u'+Date.now(),
+        year: e.year,
+        title:e.title,
+        duration:e.duration,
+        color:e.color,
+        absenceType:e.absenceType || 'none'
+    });
+    state.einsaetze = state.einsaetze.filter(x=>x.id!==e.id);
+    saveState(); closeModal(); render();
+}
+
+function renderUnplannedTray(){
+    const list = document.getElementById('unplannedList');
+    if(!list) return;
+    const orders = (state.unplannedOrders || []).filter(x => !x.year || x.year === currentYear);
+    if(orders.length===0) { list.innerHTML = '<div style="color:#5f6368; font-size:12px; padding:8px;">Keine geparkten Aufträge.</div>'; return; }
+    list.innerHTML = orders.map(o => `<div class="unplanned-card" draggable="true" data-u-id="${o.id}" title="Auf Zeile ziehen, um einzuplanen"><strong>${o.title}</strong><div class="meta">Dauer: ${o.duration||1} Tag(e)</div></div>`).join('');
+    list.querySelectorAll('.unplanned-card').forEach(card => {
+        card.ondragstart = ev => ev.dataTransfer.setData('text/unplanned', card.dataset.uId);
+    });
+}
+
+function scheduleUnplannedOrder(unplannedId, mId, start){
+    const idx = state.unplannedOrders.findIndex(x=>x.id===unplannedId);
+    if(idx<0) return;
+    const src = state.unplannedOrders[idx];
+    const dur = parseInt(src.duration) || 1;
+    const pCheck = validatePlacement(mId, start, dur);
+    if(!pCheck.valid) return alert('Aktion blockiert: ' + pCheck.msg);
+    const newItem = {
+        id:'e'+Date.now(),
+        mId,
+        year:currentYear,
+        title:src.title || 'Neu...',
+        start,
+        duration:dur,
+        color:src.color || '#4285f4',
+        absenceType: src.absenceType || 'none',
+        isRented:false,
+        linkedTaskId:null
+    };
+    state.einsaetze.push(newItem);
+    state.unplannedOrders.splice(idx,1);
+    saveState(); render();
 }
 
 function gridClick(ev,mId){ 
@@ -1146,7 +1353,7 @@ function toggleTimeEntryMode(){
 }
 
 function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }
-function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart:'', empEnd:''}); saveState(); render(); } }
+function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart:'', empEnd:'', isSubcontractor:false}); saveState(); render(); } }
 function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
 function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }

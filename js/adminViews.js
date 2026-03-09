@@ -24,7 +24,7 @@ function renderPeopleAdmin() {
                     <button class="btn btn-primary" onclick="addMonteur(event,'${g.id}')">+ Mitarbeiter</button>
                 </span>
             </div>
-            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
+            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name}${m.isSubcontractor ? ' <em style="color:#e65100;">(Subunternehmer)</em>' : ''} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
         </div>
     `).join('');
 
@@ -106,6 +106,20 @@ function renderTimeAdmin() {
     const totalOvertime = rows.reduce((a,b)=>a+b.overtime,0);
     const avgHours = rows.length ? Math.round((totalHours/rows.length)*100)/100 : 0;
 
+    const allMonteurs = state.groups.flatMap(g => g.monteure);
+    const vacationStats = allMonteurs
+                .filter(m => !m.isSubcontractor)
+        .filter(m => employeeFilter === 'all' || m.id === employeeFilter)
+        .map(m => {
+            const planned = state.einsaetze
+                .filter(e => e.year === currentYear && e.mId === m.id && e.absenceType === 'urlaub')
+                .reduce((sum, e) => sum + (parseInt(e.duration, 10) || 0), 0);
+            const allowance = parseInt(m.vacationDays || 0, 10);
+            const remaining = allowance - planned;
+            return { name: m.name, allowance, planned, remaining };
+        })
+        .sort((a,b) => a.name.localeCompare(b.name, 'de'));
+
     summaryEl.innerHTML = `
       <div class="kpi-row">
         <div class="kpi"><strong>Einträge:</strong> ${rows.length}</div>
@@ -115,6 +129,10 @@ function renderTimeAdmin() {
       </div>
       <table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Tage</th><th>Stunden</th><th>Überstunden</th></tr></thead><tbody>
       ${Object.entries(totalsByEmployee).map(([name,t])=>`<tr><td>${name}</td><td>${t.days}</td><td>${Math.round(t.hours*100)/100}h</td><td>${Math.round(t.overtime*100)/100}h</td></tr>`).join('')}
+      </tbody></table>
+      <div style="height:10px"></div>
+      <table class="admin-table"><thead><tr><th>Mitarbeiter</th><th>Urlaubsanspruch</th><th>Geplant/Genommen</th><th>Resturlaub</th></tr></thead><tbody>
+      ${vacationStats.map(v=>`<tr><td>${v.name}</td><td>${v.allowance} Tage</td><td>${v.planned} Tage</td><td>${v.remaining} Tage</td></tr>`).join('')}
       </tbody></table>
     `;
 
