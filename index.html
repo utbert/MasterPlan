@@ -73,7 +73,7 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .out-of-office { position: absolute; top:0; bottom:0; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px); z-index: 5; pointer-events: none; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
 
 /* Bars */
-.bar{ position:absolute; height:34px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:11px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top: 8px; user-select: none; }
+.bar{ position:absolute; height:26px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top:0; user-select:none; }
 .bar.is-absence { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
 .bar.abs-urlaub{ background-color:#5e35b1 !important; }
 .bar.abs-kindkrank{ background-color:#8e24aa !important; }
@@ -336,7 +336,7 @@ let startDate = new Date(currentYear, 0, 1);
 const today = new Date();
 let activeRowOffsets = []; 
 let editContext = { type: null, id: null, gId: null };
-const TASK_BAR_VERTICAL_OFFSET = 14;
+const TASK_BAR_VERTICAL_OFFSET = 18;
 let workTimeContext = { mId: null, dayIdx: null };
 let timeEntryMode = false;
 
