@@ -1,0 +1,171 @@
+function getWorkHoursKey(mId, dayIdx) {
+    return `${currentYear}-${mId}-${dayIdx}`;
+}
+
+function toMinutes(timeStr) {
+    if(!timeStr || !timeStr.includes(':')) return null;
+    const [h,m] = timeStr.split(':').map(x => parseInt(x,10));
+    if(Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h*60+m;
+}
+
+function calcHoursFromRange(from, to, breakMin) {
+    const fromMin = toMinutes(from);
+    const toMin = toMinutes(to);
+    if(fromMin === null || toMin === null || toMin <= fromMin) return null;
+    const pause = Math.max(0, parseInt(breakMin || 0, 10));
+    const worked = Math.max(0, toMin - fromMin - pause);
+    return Math.round((worked / 60) * 100) / 100;
+}
+
+
+
+function getMonteurTimePreset(mId) {
+    const m = getMonteur(mId);
+    return {
+        from: (m && m.workStart) ? m.workStart : '07:00',
+        to: (m && m.workEnd) ? m.workEnd : '15:30',
+        breakMin: (m && m.defaultBreak !== undefined) ? parseInt(m.defaultBreak,10) : 30
+    };
+}
+
+function shiftTimeMinutes(timeStr, deltaMinutes) {
+    const minutes = toMinutes(timeStr);
+    if(minutes === null) return timeStr;
+    const shifted = Math.max(0, Math.min(23*60+59, minutes + deltaMinutes));
+    const h = String(Math.floor(shifted/60)).padStart(2,'0');
+    const m = String(shifted%60).padStart(2,'0');
+    return `${h}:${m}`;
+}
+
+function getExpectedDailyHours(mId) {
+    if(typeof getExpectedDailyHoursForMonteur === 'function') return getExpectedDailyHoursForMonteur(mId);
+    const preset = getMonteurTimePreset(mId);
+    const modeled = calcHoursFromRange(preset.from, preset.to, preset.breakMin);
+    return modeled === null ? 8 : modeled;
+}
+
+function getPreviousWorkRecord(mId, dayIdx) {
+    for(let d=dayIdx-1; d>=0; d--) {
+        const prev = state.workHours[getWorkHoursKey(mId, d)];
+        if(prev && prev.from && prev.to) return prev;
+    }
+    return null;
+}
+
+function applyWorktimePreset(type) {
+    const preset = getMonteurTimePreset(workTimeContext.mId);
+    if(type === 'full') {
+        document.getElementById('wtFrom').value = preset.from;
+        document.getElementById('wtTo').value = preset.to;
+        document.getElementById('wtBreak').value = preset.breakMin;
+    } else if(type === 'short') {
+        document.getElementById('wtFrom').value = preset.from;
+        document.getElementById('wtTo').value = shiftTimeMinutes(preset.to, -30);
+        document.getElementById('wtBreak').value = preset.breakMin;
+    } else if(type === 'off') {
+        document.getElementById('wtFrom').value = '';
+        document.getElementById('wtTo').value = '';
+        document.getElementById('wtBreak').value = 0;
+        document.getElementById('wtNote').value = 'Frei';
+    }
+}
+
+function getPlannedProjectNoteForDay(mId, dayIdx) {
+    const planned = state.einsaetze
+        .filter(e => e.year === currentYear && e.mId === mId && rangesOverlap(dayIdx, 1, e.start, e.duration))
+        .filter(e => !e.absenceType || e.absenceType === 'none')
+        .map(e => e.title)
+        .filter(Boolean);
+    if(planned.length === 0) return '';
+    return planned.join(' | ');
+}
+
+function openWorkTimeContextMenu(ev, mId, dayIdx) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const menu = document.getElementById('worktimeMenu');
+    const key = getWorkHoursKey(mId, dayIdx);
+    let current = state.workHours[key] || null;
+    const plannedNote = getPlannedProjectNoteForDay(mId, dayIdx);
+    if(!current) {
+        const model = getMonteurTimePreset(mId);
+        const previous = getPreviousWorkRecord(mId, dayIdx);
+        current = previous ? { ...previous, note: plannedNote || (previous.note || '') } : { from:model.from, to:model.to, breakMin:model.breakMin, hours:0, note: plannedNote || '' };
+    } else if((!current.note || !current.note.trim()) && plannedNote) {
+        current = { ...current, note: plannedNote };
+    }
+
+    workTimeContext = { mId, dayIdx };
+    document.getElementById('wtFrom').value = current.from || '';
+    document.getElementById('wtTo').value = current.to || '';
+    document.getElementById('wtBreak').value = current.breakMin || 0;
+    document.getElementById('wtNote').value = current.note || ''; 
+
+    menu.style.display = 'block';
+    menu.style.left = Math.min(window.innerWidth - 300, ev.clientX + 8) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 280, ev.clientY + 8) + 'px';
+}
+
+function closeWorkTimeContextMenu() {
+    document.getElementById('worktimeMenu').style.display = 'none';
+}
+
+function saveWorkTimeFromMenu() {
+    if(workTimeContext.mId === null) return;
+    const from = document.getElementById('wtFrom').value;
+    const to = document.getElementById('wtTo').value;
+    const breakMin = parseInt(document.getElementById('wtBreak').value || 0, 10);
+    const note = document.getElementById('wtNote').value || '';
+    const hours = calcHoursFromRange(from, to, breakMin);
+    if(hours === null) return alert('Bitte gültige Von/Bis-Zeit eingeben (Bis muss nach Von liegen).');
+
+    const expectedHours = getExpectedDailyHours(workTimeContext.mId);
+    const overtime = Math.round((hours - expectedHours) * 100) / 100;
+
+    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
+    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours, overtime, note };
+    saveState();
+    closeWorkTimeContextMenu();
+    render();
+}
+
+function deleteWorkTimeFromMenu() {
+    if(workTimeContext.mId === null) return;
+    const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
+    delete state.workHours[key];
+    saveState();
+    closeWorkTimeContextMenu();
+    render();
+}
+
+function renderWorkHoursForMonteur(mId, rowEl) {
+    Object.entries(state.workHours).forEach(([key, rec]) => {
+        const [year, mmId, day] = key.split('-');
+        if(parseInt(year)!==currentYear || mmId!==mId) return;
+        const dayIdx = parseInt(day);
+        if(Number.isNaN(dayIdx) || dayIdx < 0 || dayIdx >= totalDays) return;
+        const chip = document.createElement('div');
+        chip.className = 'hours-chip';
+        chip.style.left = (dayIdx * dayWidth + 3) + 'px';
+        const hours = (typeof rec === 'number') ? rec : (rec.hours || 0);
+        const from = rec.from || '--:--';
+        const to = rec.to || '--:--';
+        const pause = rec.breakMin || 0;
+        const note = rec.note || '';
+        chip.textContent = `${hours}h`;
+        chip.title = `${from}-${to} | Pause ${pause}m${note ? ' | ' + note : ''}`;
+        chip.onclick = ev => { ev.stopPropagation(); openWorkTimeContextMenu(ev, mId, dayIdx); };
+        chip.oncontextmenu = ev => openWorkTimeContextMenu(ev, mId, dayIdx);
+        rowEl.appendChild(chip);
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    const menu = document.getElementById('worktimeMenu');
+    if(!menu || menu.style.display !== 'block') return;
+    if(e.key === 'Enter') {
+        e.preventDefault();
+        saveWorkTimeFromMenu();
+    }
+});

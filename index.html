@@ -22,8 +22,24 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
 .year-nav { display: flex; align-items: center; gap: 5px; background: #f1f3f4; padding: 4px; border-radius: 6px; }
 .year-display { font-weight: bold; padding: 0 10px; min-width: 45px; text-align: center; font-size: 14px; }
+.toolbar input[type="search"], .toolbar select { padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; }
+.toolbar input[type="search"]{ min-width:220px; }
+.view-nav{ display:flex; gap:6px; margin-right:8px; }
+.view-btn{ padding:6px 10px; border:1px solid var(--border); border-radius:4px; background:#fff; font-size:12px; cursor:pointer; }
+.view-btn.active{ background:#e8f0fe; border-color:#aecbfa; color:#174ea6; }
+.view-page{ display:none; flex:1; min-height:0; overflow:auto; }
+.view-page.active{ display:block; }
+.admin-page{ padding:16px; }
+.admin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.admin-card{ border:1px solid var(--border); border-radius:8px; padding:12px; background:#fff; }
+.admin-card h3{ margin:0 0 10px 0; font-size:15px; }
+.admin-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.admin-table th,.admin-table td{ border-bottom:1px solid #eee; padding:6px 8px; text-align:left; }
+.admin-actions{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.kpi-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.kpi{ border:1px solid #eee; border-radius:6px; padding:8px 10px; background:#fafafa; font-size:12px; }
 
-.app-container{ display:flex; flex-grow:1; overflow:hidden; }
+.app-container{ display:flex; height:100%; min-height:0; overflow:hidden; }
 
 /* Sidebar */
 .sidebar{ width:var(--name-width); flex-shrink:0; border-right:2px solid #ccc; display:flex; flex-direction:column; z-index:500; background:#fff; }
@@ -43,28 +59,51 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .header-row{ display:flex; height:35px; border-bottom:1px solid rgba(255,255,255,0.2); }
 .header-cell{ flex-shrink:0; text-align:center; line-height:35px; font-size:11px; font-weight:bold; border-right:1px solid rgba(255,255,255,0.2); }
 .header-cell.is-today{ background:var(--today-bg)!important; color:#333; }
+.header-cell.is-holiday{ background:#d93025!important; color:#fff; }
 
 .grid{ position:relative; width:fit-content; }
 .row-monteur{ height:var(--row-height); border-bottom:1px solid #eee; position:relative; }
 .grid-background{ position:absolute; top:0; left:0; right:0; bottom:0; display:flex; z-index:0; pointer-events:none; }
-.bg-day{ height:100%; border-right:1px solid #f1f3f4; flex-shrink:0; }
+.bg-day{ height:100%; border-right:1px solid #f1f3f4; flex-shrink:0; position:relative; overflow:hidden; }
 .bg-weekend{ background-color:var(--weekend-bg); }
+.bg-holiday{ background-color:#fde8e7; }
+.bg-holiday::after{ content:attr(data-holiday); position:absolute; top:4px; bottom:4px; left:50%; transform:translateX(-50%); writing-mode:vertical-rl; text-orientation:mixed; font-size:10px; font-weight:700; color:#b3261e; opacity:0.7; letter-spacing:0.5px; white-space:nowrap; pointer-events:none; }
 
 /* Schraffur für nicht eingestellte Zeiträume */
 .out-of-office { position: absolute; top:0; bottom:0; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.08) 10px, rgba(0,0,0,0.08) 20px); z-index: 5; pointer-events: none; border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
 
 /* Bars */
-.bar{ position:absolute; height:34px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:11px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top: 8px; user-select: none; }
-.bar.is-vacation { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
+.bar{ position:absolute; height:26px; color:white; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; cursor:move; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.15); margin-top:0; user-select:none; }
+.bar.is-absence { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.2) 10px, transparent 10px, transparent 20px) !important; }
+.bar.abs-urlaub{ background-color:#5e35b1 !important; }
+.bar.abs-kindkrank{ background-color:#8e24aa !important; }
+.bar.abs-krank{ background-color:#c62828 !important; }
+.bar.abs-fortbildung{ background-color:#00897b !important; }
 .bar.is-rented { background-color: #ff9800 !important; background-image: repeating-linear-gradient(-45deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 10px, transparent 10px, transparent 20px) !important; color: #fff !important; }
 .bar-content{ flex-grow:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 .resizer{ width:10px; height:100%; position:absolute; right:0; top:0; cursor:col-resize; z-index: 12; }
-
+.hours-chip{ position:absolute; top:2px; left:2px; font-size:10px; line-height:1; background:rgba(26,115,232,0.12); color:#0b57d0; border:1px solid rgba(26,115,232,0.25); border-radius:3px; padding:2px 3px; z-index:6; cursor:pointer; }
 /* Modal */
 .modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; z-index:2000; }
-.modal { background:white; padding:20px; border-radius:8px; width:350px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-.modal input[type="text"], .modal input[type="number"], .modal input[type="date"] { width:100%; padding:8px; margin:5px 0 15px 0; border:1px solid var(--border); border-radius:4px; }
-.modal label { font-size: 12px; color: #555; font-weight: bold; }
+.modal { background:white; padding:22px; border-radius:14px; width:420px; box-shadow: 0 16px 36px rgba(0,0,0,0.22); border:1px solid #eef1f4; }
+.modal h3{ font-size:18px; margin-bottom:14px; }
+.modal input[type="text"], .modal input[type="number"], .modal input[type="date"], .modal input[type="time"], .modal select { width:100%; padding:10px 11px; margin:6px 0 12px 0; border:1px solid #d7dde3; border-radius:10px; background:#fff; font-size:13px; }
+.modal input:focus, .modal select:focus{ outline:none; border-color:#90caf9; box-shadow:0 0 0 3px rgba(66,133,244,0.16); }
+.modal label { font-size: 11px; color: #5f6368; font-weight: 700; letter-spacing:0.3px; text-transform:uppercase; }
+
+/* Modal design for floating context menus */
+.context-menu{ position:fixed; display:none; z-index:3000; width:300px; }
+.context-menu .modal{ width:100%; padding:14px; border-radius:12px; box-shadow: 0 12px 28px rgba(0,0,0,0.2); }
+.context-menu h4{ margin:0 0 8px 0; font-size:13px; }
+.context-menu label{ display:block; font-size:11px; color:#5f6368; font-weight:700; letter-spacing:0.3px; text-transform:uppercase; margin-bottom:2px; }
+.context-menu input{ width:100%; margin:6px 0 12px 0; padding:10px 11px; border:1px solid #d7dde3; border-radius:10px; background:#fff; font-size:13px; }
+.context-menu input:focus{ outline:none; border-color:#90caf9; box-shadow:0 0 0 3px rgba(66,133,244,0.16); }
+.context-menu .menu-actions{ display:flex; gap:8px; justify-content:flex-end; }
+
+.modern-section{ border:1px solid #edf0f2; background:linear-gradient(180deg,#fafbfd 0%, #fff 100%); border-radius:12px; padding:12px; margin-bottom:12px; }
+.modern-section-title{ font-size:12px; font-weight:700; color:#1f2937; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.modern-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.modern-grid .full{ grid-column:1 / -1; }
 
 #today-line{ position:absolute; top:0; bottom:0; width:2px; background:#ea4335; z-index:20; pointer-events:none; }
 .action-btn{ cursor:pointer; font-size:18px; color:#999; padding: 0 5px; }
@@ -74,20 +113,37 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 
 <div class="toolbar">
     <strong>MasterPlan Pro v25.3</strong>
+    <div class="view-nav">
+        <button class="view-btn active" data-view="dispo" onclick="switchView('dispo')">Disposition</button>
+        <button class="view-btn" data-view="people" onclick="switchView('people')">Mitarbeiter</button>
+        <button class="view-btn" data-view="tasks" onclick="switchView('tasks')">Aufgaben</button>
+        <button class="view-btn" data-view="time" onclick="switchView('time')">Zeiterfassung</button>
+    </div>
     <div class="year-nav">
         <button class="btn" onclick="changeYearBy(-1)">❮</button>
         <div class="year-display" id="year-label">2026</div>
         <button class="btn" onclick="changeYearBy(1)">❯</button>
     </div>
     <button class="btn" onclick="scrollToToday()">Heute</button>
+    <button class="btn" id="time-mode-btn" onclick="toggleTimeEntryMode()">⏱ Zeitmodus: AUS</button>
     <button class="btn btn-primary" onclick="addTeam()">+ Team</button>
-    <button class="btn btn-warning" onclick="addResource()">+ Gerät</button>
+    <button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button>
+    <input type="search" id="search-input" placeholder="Suche: Team, Mitarbeiter, Gerät, Einsatz..." oninput="render()">
+    <select id="status-filter" onchange="render()">
+        <option value="all">Alle Einträge</option>
+        <option value="normal">Normale Einsätze</option>
+        <option value="absence">Alle Abwesenheiten</option>
+        <option value="urlaub">Nur Urlaub</option>
+        <option value="kindkrank">Nur Kindkrank</option>
+        <option value="krank">Nur Krank</option>
+    </select>
     <button class="btn" onclick="zoom(1.2)">🔍 +</button>
     <button class="btn" onclick="zoom(0.8)">🔍 -</button>
     <div style="flex-grow:1;"></div>
     <span id="zoom-info" style="font-size:12px;"></span>
 </div>
 
+<div id="view-dispo" class="view-page active">
 <div class="app-container">
     <div class="sidebar">
         <div class="sidebar-header">Personal & Ressourcen</div>
@@ -107,6 +163,59 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
         </div>
     </div>
 </div>
+</div>
+
+<div id="view-people" class="view-page admin-page">
+    <div class="admin-grid">
+        <div class="admin-card">
+            <h3>Mitarbeiter & Teams</h3>
+            <div class="admin-actions"><button class="btn btn-primary" onclick="addTeam()">+ Team</button></div>
+            <div id="people-admin-list"></div>
+        </div>
+        <div class="admin-card">
+            <h3>Ressourcen & Gruppen</h3>
+            <div class="admin-actions"><button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button></div>
+            <div id="resource-admin-list"></div>
+        </div>
+    </div>
+    <div class="admin-card" style="margin-top:16px;">
+        <h3>Daten (JSON)</h3>
+        <div class="admin-actions">
+            <button class="btn" onclick="refreshStateJson()">Aktualisieren</button>
+            <button class="btn" onclick="applyStateJson()">JSON anwenden</button>
+        </div>
+        <textarea id="state-json" style="width:100%; min-height:180px; font-family:monospace;"></textarea>
+    </div>
+</div>
+
+<div id="view-tasks" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Aufgabenübersicht (Jahr <span id="tasks-year-label"></span>)</h3>
+        <div id="tasks-admin-list"></div>
+    </div>
+</div>
+
+<div id="view-time" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Zeiterfassung (Von/Bis/Pause)</h3>
+        <div class="admin-actions">
+            <label for="time-month-filter" style="font-size:12px; color:#555;">Monat:</label>
+            <select id="time-month-filter" onchange="renderTimeAdmin()">
+                <option value="all">Ganzes Jahr</option>
+                <option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option>
+                <option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
+            </select>
+            <label for="time-employee-filter" style="font-size:12px; color:#555;">Mitarbeiter:</label>
+            <select id="time-employee-filter" onchange="renderTimeAdmin()">
+                <option value="all">Alle Mitarbeiter</option>
+            </select>
+            <button class="btn" onclick="exportTimeCsv()">CSV Export</button>
+        </div>
+        <div id="time-admin-summary"></div>
+        <div id="time-admin-list"></div>
+    </div>
+</div>
 
 <div id="universalModal" class="modal-overlay">
     <div class="modal">
@@ -119,26 +228,69 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
             <label>Dauer (Tage)</label>
             <input type="number" id="fieldDuration" min="1" placeholder="1">
             
-            <label>Farbe</label>
-            <input type="color" id="fieldColor" style="height:40px; width:100%; border:none; padding:0; margin-bottom:15px;">
+            <label>Farbe (Preset)</label>
+            <select id="fieldColor">
+                <option value="#4285f4">Blau</option>
+                <option value="#34a853">Grün</option>
+                <option value="#fbbc05">Gelb</option>
+                <option value="#ea4335">Rot</option>
+                <option value="#9c27b0">Lila</option>
+                <option value="#00acc1">Türkis</option>
+                <option value="#6d4c41">Braun</option>
+            </select>
             
-            <label id="wrapVacation" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer;">
-                <input type="checkbox" id="fieldIsVacation" style="width:auto; margin:0;"> Ist Urlaub?
-            </label>
-            <label id="wrapRented" style="display:flex; align-items:center; gap:8px; font-size:14px; color:#000; cursor:pointer; margin-top:5px;">
-                <input type="checkbox" id="fieldIsRentedTimeline" style="width:auto; margin:0;"> Extern verliehen?
-            </label>
+            <div id="wrapAbsence" style="display:none; margin-top:5px; flex-direction:column;">
+                <label>Abwesenheit</label>
+                <select id="fieldAbsenceType">
+                    <option value="none">Keine (normaler Einsatz)</option>
+                    <option value="urlaub">Urlaub</option>
+                    <option value="kindkrank">Kindkrank</option>
+                    <option value="krank">Krank</option>
+                    <option value="fortbildung">Fortbildung</option>
+                </select>
+            </div>
+            <div id="wrapLinkedTask" style="display:none; margin-top:10px; flex-direction:column;">
+                <label>Mitarbeiter-Aufgabe zuordnen</label>
+                <select id="fieldLinkedTask"></select>
+            </div>
         </div>
 
         <div id="monteurFields" style="display:none;">
-            <label>Urlaubstage pro Jahr</label>
-            <input type="number" id="fieldVacation" min="0" placeholder="z.B. 30">
-            
-            <label>Eingestellt von</label>
-            <input type="date" id="fieldEmpStart">
-            
-            <label>Eingestellt bis</label>
-            <input type="date" id="fieldEmpEnd">
+            <div class="modern-section">
+                <div class="modern-section-title">👤 Vertrags- & Abwesenheitsdaten</div>
+                <div class="modern-grid">
+                    <div class="full">
+                        <label>Urlaubstage pro Jahr</label>
+                        <input type="number" id="fieldVacation" min="0" placeholder="z.B. 30">
+                    </div>
+                    <div>
+                        <label>Eingestellt von</label>
+                        <input type="date" id="fieldEmpStart">
+                    </div>
+                    <div>
+                        <label>Eingestellt bis</label>
+                        <input type="date" id="fieldEmpEnd">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modern-section">
+                <div class="modern-section-title">⏱ Arbeitszeitmodell (Preset)</div>
+                <div class="modern-grid">
+                    <div>
+                        <label>Arbeitsbeginn</label>
+                        <input type="time" id="fieldWorkStart" step="900">
+                    </div>
+                    <div>
+                        <label>Arbeitsende</label>
+                        <input type="time" id="fieldWorkEnd" step="900">
+                    </div>
+                    <div class="full">
+                        <label>Standard-Pause (Minuten)</label>
+                        <input type="number" id="fieldDefaultBreak" min="0" step="5" placeholder="z.B. 30">
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div id="resourceFields" style="display:none;">
@@ -154,6 +306,32 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     </div>
 </div>
 
+
+<div id="worktimeMenu" class="context-menu" oncontextmenu="event.preventDefault()">
+    <div class="modal">
+        <h4>Arbeitszeit erfassen</h4>
+        <label>Von</label>
+        <input type="time" id="wtFrom" step="900">
+        <label>Bis</label>
+        <input type="time" id="wtTo" step="900">
+        <label>Pause (Minuten)</label>
+        <input type="number" id="wtBreak" min="0" step="5" value="0">
+        <label>Notiz</label>
+        <input type="text" id="wtNote" placeholder="z.B. Baustelle A">
+        <div class="admin-actions" style="margin-top:8px;">
+            <button class="btn" onclick="applyWorktimePreset('full')">Preset 8h</button>
+            <button class="btn" onclick="applyWorktimePreset('short')">Preset 7.5h</button>
+            <button class="btn" onclick="applyWorktimePreset('off')">Frei</button>
+        </div>
+        <div class="menu-actions">
+            <button class="btn" onclick="deleteWorkTimeFromMenu()">Löschen</button>
+            <button class="btn btn-primary" onclick="saveWorkTimeFromMenu()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/worktime.js"></script>
+<script src="js/adminViews.js"></script>
 <script>
 let currentYear = 2026;
 let dayWidth = 100;
@@ -162,17 +340,57 @@ let startDate = new Date(currentYear, 0, 1);
 const today = new Date();
 let activeRowOffsets = []; 
 let editContext = { type: null, id: null, gId: null };
+const TASK_BAR_VERTICAL_OFFSET = 18;
+let workTimeContext = { mId: null, dayIdx: null };
+let timeEntryMode = false;
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
-    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, empStart: '', empEnd: ''}]}],
-    resources: [{id:'r1', name:'Minibagger 1.5t', rentedTo:''}],
-    einsaetze:[]
+    groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart: '', empEnd: ''}]}],
+    resourceGroups:[{id:'rg1',name:'Geräte Hof',collapsed:false}],
+    resources: [{id:'r1', groupId:'rg1', name:'Minibagger 1.5t', rentedTo:''}],
+    einsaetze:[],
+    workHours:{}
 };
 
-// Update legacy state
-if(!state.resources) state.resources = [];
+function normalizeState() {
+    if(!state.resources) state.resources = [];
+    if(!state.resourceGroups || state.resourceGroups.length === 0) {
+        state.resourceGroups = [{id:'rg1', name:'Geräte Hof', collapsed:false}];
+    }
+    state.resources.forEach(r => { if(!r.groupId) r.groupId = state.resourceGroups[0].id; });
+    if(!state.workHours) state.workHours = {};
+    state.einsaetze.forEach(e => {
+        if(!e.absenceType) e.absenceType = e.isVacation ? 'urlaub' : 'none';
+        if(e.isVacation !== undefined) delete e.isVacation;
+    });
+    state.groups.forEach(g => g.monteure.forEach(m => {
+        if(!m.workStart) m.workStart = '07:00';
+        if(!m.workEnd) m.workEnd = '15:30';
+        if(m.defaultBreak === undefined || m.defaultBreak === null) m.defaultBreak = 30;
+    }));
+    Object.keys(state.workHours).forEach(key => {
+        const val = state.workHours[key];
+        if(typeof val === 'number') state.workHours[key] = { from: '', to: '', breakMin: 0, hours: val, note:'' };
+        if(typeof val === 'string') {
+            const num = parseFloat(val.replace(',', '.'));
+            state.workHours[key] = Number.isNaN(num) ? { from:'', to:'', breakMin:0, hours:0, note:'' } : { from:'', to:'', breakMin:0, hours:num, note:'' };
+        }
+        if(typeof state.workHours[key] === 'object' && state.workHours[key]) {
+            if(state.workHours[key].note === undefined) state.workHours[key].note='';
+            if(state.workHours[key].overtime === undefined) {
+                const parts = key.split('-');
+                const mId = parts.length > 2 ? parts[1] : null;
+                const expected = mId ? getExpectedDailyHoursForMonteur(mId) : 8;
+                const hrs = Number(state.workHours[key].hours || 0);
+                state.workHours[key].overtime = Math.round((hrs - expected) * 100) / 100;
+            }
+        }
+    });
+}
 
-function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); }
+normalizeState();
+
+function saveState() { localStorage.setItem('masterPlanState', JSON.stringify(state)); refreshStateJson(); }
 
 const mainScroll = document.getElementById('main-scroll');
 const sidebarList = document.getElementById('sidebar-list');
@@ -193,14 +411,150 @@ function getMonteur(mId) {
     return null;
 }
 
+function getExpectedDailyHoursForMonteur(mId) {
+    const m = getMonteur(mId);
+    const from = (m && m.workStart) ? m.workStart : '07:00';
+    const to = (m && m.workEnd) ? m.workEnd : '15:30';
+    const breakMin = (m && m.defaultBreak !== undefined && m.defaultBreak !== null) ? parseInt(m.defaultBreak, 10) : 30;
+    const modeled = (typeof calcHoursFromRange === 'function') ? calcHoursFromRange(from, to, breakMin) : null;
+    return modeled === null ? 8 : modeled;
+}
+
 function getResource(rId) {
     return state.resources.find(x => x.id === rId) || null;
+}
+
+
+function getResourceGroup(rgId) {
+    return state.resourceGroups.find(x => x.id === rgId) || null;
 }
 
 function getDayOffset(dateStr) {
     if(!dateStr) return null;
     let d = new Date(dateStr); d.setHours(0,0,0,0);
     return Math.round((d - new Date(currentYear, 0, 1)) / 86400000);
+}
+
+function calcEasterSunday(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+}
+
+function getHolidayMap(year) {
+    const map = new Map();
+    const addHoliday = (date, name) => {
+        if(date.getFullYear() !== year) return;
+        const idx = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(year, 0, 1)) / 86400000);
+        map.set(idx, name);
+    };
+
+    addHoliday(new Date(year, 0, 1), 'Neujahr');
+    addHoliday(new Date(year, 4, 1), 'Tag der Arbeit');
+    addHoliday(new Date(year, 9, 3), 'Tag der Deutschen Einheit');
+    addHoliday(new Date(year, 11, 25), '1. Weihnachtstag');
+    addHoliday(new Date(year, 11, 26), '2. Weihnachtstag');
+
+    const easter = calcEasterSunday(year);
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() - 2), 'Karfreitag');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 1), 'Ostermontag');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 39), 'Christi Himmelfahrt');
+    addHoliday(new Date(easter.getFullYear(), easter.getMonth(), easter.getDate() + 50), 'Pfingstmontag');
+    return map;
+}
+
+function rangesOverlap(startA, durationA, startB, durationB) {
+    const endA = startA + durationA - 1;
+    const endB = startB + durationB - 1;
+    return !(endA < startB || startA > endB);
+}
+
+function getLinkableTasksForResourceEinsatz(item) {
+    return state.einsaetze.filter(e => e.year === currentYear && getMonteur(e.mId) !== null && rangesOverlap(item.start, item.duration, e.start, e.duration));
+}
+
+function applyLinkedTaskToResourceItem(item, linkedTaskId) {
+    const linked = getEinsatzById(linkedTaskId);
+    if(!linked || !getMonteur(linked.mId) || !getResource(item.mId)) return false;
+
+    const oldStart = item.start;
+    const oldDuration = item.duration;
+    const oldTitle = item.title;
+    const oldColor = item.color;
+
+    item.start = linked.start;
+    item.duration = linked.duration;
+    item.title = linked.title;
+    item.color = linked.color || item.color || '#4285f4';
+    item.linkedTaskId = linked.id;
+    item.absenceType = "none";
+    item.isRented = false;
+
+    const check = validatePlacement(item.mId, item.start, item.duration, item.id);
+    if(!check.valid) {
+        item.start = oldStart;
+        item.duration = oldDuration;
+        item.title = oldTitle;
+        item.color = oldColor;
+        item.linkedTaskId = null;
+        return false;
+    }
+    return true;
+}
+
+function getEinsatzById(eId) {
+    return state.einsaetze.find(e => e.id === eId) || null;
+}
+
+function getLinkedTaskLabel(linkedTaskId) {
+    if(!linkedTaskId) return '';
+    const linked = getEinsatzById(linkedTaskId);
+    if(!linked) return ' (Zuordnung fehlt)';
+    const m = getMonteur(linked.mId);
+    return m ? ` (${m.name}: ${linked.title})` : '';
+}
+
+function sanitizeLinkedTask(item) {
+    if(!item || !item.linkedTaskId) return;
+    if(!getResource(item.mId)) { item.linkedTaskId = null; return; }
+    const linked = getEinsatzById(item.linkedTaskId);
+    if(!linked || linked.year !== currentYear || !getMonteur(linked.mId) || !rangesOverlap(item.start, item.duration, linked.start, linked.duration)) {
+        item.linkedTaskId = null;
+        return;
+    }
+    item.title = linked.title;
+    item.color = linked.color || item.color || '#4285f4';
+}
+
+function getTaskSearchBlob(entry) {
+    let blob = `${entry.title}`;
+    if(entry.linkedTaskId) {
+        const linked = getEinsatzById(entry.linkedTaskId);
+        if(linked) {
+            const linkedMonteur = getMonteur(linked.mId);
+            blob += ` ${linked.title}`;
+            if(linkedMonteur) blob += ` ${linkedMonteur.name}`;
+        }
+    }
+    return blob;
+}
+
+
+
+function isAbsence(entry) {
+    return !!entry.absenceType && entry.absenceType !== 'none';
 }
 
 function isPlacementValid(mId, startIdx, durationIdx) {
@@ -218,13 +572,52 @@ function isPlacementValid(mId, startIdx, durationIdx) {
     return { valid: true };
 }
 
+function hasOverlap(mId, startIdx, durationIdx, excludeId = null) {
+    const endIdx = startIdx + durationIdx - 1;
+    const conflict = state.einsaetze.find(e => {
+        if(e.year !== currentYear || e.mId !== mId || e.id === excludeId) return false;
+        const eStart = parseInt(e.start);
+        const eEnd = eStart + parseInt(e.duration) - 1;
+        return !(endIdx < eStart || startIdx > eEnd);
+    });
+    if(conflict) {
+        return { valid: false, msg: `Doppelbelegung erkannt: "${conflict.title}" belegt diesen Zeitraum bereits.` };
+    }
+    return { valid: true };
+}
+
+function validatePlacement(mId, startIdx, durationIdx, excludeId = null) {
+    const baseCheck = isPlacementValid(mId, startIdx, durationIdx);
+    if(!baseCheck.valid) return baseCheck;
+    return hasOverlap(mId, startIdx, durationIdx, excludeId);
+}
+
+function matchesSearch(entityText, searchTerm) {
+    if(!searchTerm) return true;
+    return entityText.toLowerCase().includes(searchTerm);
+}
+
+function matchesOptionalSearch(entityText, searchTerm) {
+    if(!searchTerm) return false;
+    return entityText.toLowerCase().includes(searchTerm);
+}
+
+function matchesStatusFilter(entry, statusFilter) {
+    if(statusFilter === 'absence') return isAbsence(entry);
+    if(statusFilter === 'urlaub') return entry.absenceType === 'urlaub';
+    if(statusFilter === 'kindkrank') return entry.absenceType === 'kindkrank';
+    if(statusFilter === 'krank') return entry.absenceType === 'krank';
+    if(statusFilter === 'normal') return !isAbsence(entry) && !entry.isRented;
+    return true;
+}
+
 function checkVacationLimit(mId, eId, requestedDuration) {
     let m = getMonteur(mId);
     if(!m) return {valid: true}; // Machines don't have vacation
     let max = m.vacationDays !== undefined ? parseInt(m.vacationDays) : 30;
     let used = 0;
     state.einsaetze.forEach(e => {
-        if(e.mId === mId && e.isVacation && e.id !== eId && e.year === currentYear) {
+        if(e.mId === mId && e.absenceType === 'urlaub' && e.id !== eId && e.year === currentYear) {
             used += parseInt(e.duration);
         }
     });
@@ -241,6 +634,8 @@ function render(){
     const width=totalDays*dayWidth;
     topRow.style.width=width+'px'; bottomRow.style.width=width+'px';
 
+    const holidayMap = getHolidayMap(currentYear);
+
     let i=0;
     while(i<totalDays){
         let d=new Date(startDate); d.setDate(startDate.getDate()+i);
@@ -254,7 +649,8 @@ function render(){
     if(dayWidth>=60){
         for(let j=0;j<totalDays;j++){
             let d=new Date(startDate); d.setDate(startDate.getDate()+j);
-            addCell(bottomRow,1,d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}), d.toDateString()===today.toDateString() && currentYear === today.getFullYear());
+            const holidayName = holidayMap.get(j) || '';
+            addCell(bottomRow,1,d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit'}), d.toDateString()===today.toDateString() && currentYear === today.getFullYear(), !!holidayName, holidayName);
         }
     } else {
         let j2=0;
@@ -272,7 +668,9 @@ function render(){
     for(let k=0;k<totalDays;k++){
         let d=new Date(startDate); d.setDate(startDate.getDate()+k);
         const div=document.createElement('div');
-        div.className='bg-day'+(d.getDay()===0||d.getDay()===6?' bg-weekend':'');
+        const holidayName = holidayMap.get(k) || '';
+        div.className='bg-day'+(d.getDay()===0||d.getDay()===6?' bg-weekend':'')+(holidayName ? ' bg-holiday' : '');
+        if(holidayName) { div.title = holidayName; div.setAttribute('data-holiday', holidayName); }
         div.style.width=dayWidth+'px';
         bg.appendChild(div);
     }
@@ -282,9 +680,21 @@ function render(){
     sidebar.innerHTML=''; grid.innerHTML='';
     let currentY=0;
     activeRowOffsets = [];
+    const searchTerm = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+    const statusFilter = document.getElementById('status-filter')?.value || 'all';
 
     // Personal Rendern
     state.groups.forEach(g=>{
+        const visibleMonteurs = g.monteure.filter(m => {
+            const monteurTasks = state.einsaetze.filter(e => e.mId === m.id && e.year === currentYear);
+            const hasMatchingTask = monteurTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${m.name} ${g.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+            const nameMatch = matchesOptionalSearch(`${m.name} ${g.name}`, searchTerm);
+            const noFilterActive = statusFilter === 'all' && searchTerm === '';
+            return noFilterActive || nameMatch || hasMatchingTask;
+        });
+
+        if(visibleMonteurs.length === 0 && (searchTerm || statusFilter !== 'all')) return;
+
         const gSide=document.createElement('div');
         gSide.className='row-group sidebar-item';
         gSide.innerHTML=`<span>${g.collapsed?'▶':'▼'} ${g.name}</span><div style="display:flex"><span class="action-btn" onclick="addMonteur(event,'${g.id}')">+</span></div>`;
@@ -314,7 +724,7 @@ function render(){
         currentY+=38;
 
         if(!g.collapsed){
-            g.monteure.forEach(m=>{
+            visibleMonteurs.forEach(m=>{
                 const mSide=document.createElement('div');
                 mSide.className='sidebar-monteur sidebar-item';
                 mSide.innerHTML=`<span style="width:100%">${m.name}</span>`;
@@ -329,8 +739,14 @@ function render(){
                 const mGrid=document.createElement('div');
                 mGrid.className='row-monteur'; mGrid.style.width=width+'px';
                 mGrid.onclick = e => gridClick(e, m.id);
+                mGrid.oncontextmenu = e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const dayIdx = Math.floor((e.clientX-rect.left)/dayWidth);
+                    if(dayIdx >= 0 && dayIdx < totalDays) openWorkTimeContextMenu(e, m.id, dayIdx);
+                };
                 grid.appendChild(mGrid);
                 activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: m.id });
+                renderWorkHoursForMonteur(m.id, mGrid);
 
                 let eS = getDayOffset(m.empStart); let eE = getDayOffset(m.empEnd);
                 if(eS !== null && eS > 0) {
@@ -347,14 +763,26 @@ function render(){
                     mGrid.appendChild(ooo);
                 }
 
-                renderTasksForId(m.id, mGrid, grid, currentY);
+                renderTasksForId(m.id, mGrid, grid, currentY, searchTerm, statusFilter);
                 currentY+=50;
             });
         }
     });
 
     // Maschinen & Geräte Rendern
-    if(state.resources.length > 0) {
+    const visibleResourceGroups = state.resourceGroups.map(rg => {
+        const resourcesInGroup = state.resources.filter(res => res.groupId === rg.id);
+        const visibleResources = resourcesInGroup.filter(res => {
+            const resourceTasks = state.einsaetze.filter(e => e.mId === res.id && e.year === currentYear);
+            const hasMatchingTask = resourceTasks.some(e => matchesSearch(`${getTaskSearchBlob(e)} ${res.name} ${rg.name}`, searchTerm) && matchesStatusFilter(e, statusFilter));
+            const nameMatch = matchesOptionalSearch(`${res.name} ${rg.name}`, searchTerm);
+            const noFilterActive = statusFilter === 'all' && searchTerm === '';
+            return noFilterActive || nameMatch || hasMatchingTask;
+        });
+        return { rg, visibleResources };
+    }).filter(x => x.visibleResources.length > 0 || (statusFilter === 'all' && searchTerm === ''));
+
+    if(visibleResourceGroups.length > 0) {
         const resSide = document.createElement('div');
         resSide.className = 'row-group sidebar-item';
         resSide.style.backgroundColor = '#fff3e0';
@@ -366,39 +794,77 @@ function render(){
         grid.appendChild(resGrid);
         currentY += 38;
 
-        state.resources.forEach(res => {
-            const rSide = document.createElement('div');
-            rSide.className = 'sidebar-monteur sidebar-item';
-            rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
-                              (res.rentedTo ? `<span style="font-size:10px; color:#e65100; font-weight:bold; width:100%; display:block; margin-top:2px;">↳ Verliehen an: ${res.rentedTo}</span>` : '');
-            rSide.ondblclick = e => { e.stopPropagation(); openEditModal('resource', res); };
-            sidebar.appendChild(rSide);
+        visibleResourceGroups.forEach(({rg, visibleResources}) => {
+            const rgSide = document.createElement('div');
+            rgSide.className = 'row-group sidebar-item';
+            rgSide.style.backgroundColor = '#fff8ef';
+            rgSide.innerHTML = `<span>${rg.collapsed?'▶':'▼'} ${rg.name}</span><div style="display:flex"><span class="action-btn" onclick="addResource(event,'${rg.id}')">+</span></div>`;
+            rgSide.onclick = e => { if(!e.target.classList.contains('action-btn')) { rg.collapsed = !rg.collapsed; saveState(); render(); } };
+            rgSide.ondblclick = e => { e.stopPropagation(); openEditModal('resourceGroup', rg); };
+            rgSide.ondragover = e => { e.preventDefault(); rgSide.classList.add('drag-over'); };
+            rgSide.ondragleave = () => rgSide.classList.remove('drag-over');
+            rgSide.ondrop = e => {
+                e.preventDefault(); rgSide.classList.remove('drag-over');
+                try {
+                    const data = JSON.parse(e.dataTransfer.getData('text'));
+                    if(data.rId) {
+                        const r = state.resources.find(x => x.id === data.rId);
+                        if(r && r.groupId !== rg.id) { r.groupId = rg.id; saveState(); render(); }
+                    }
+                } catch(err) {}
+            };
+            sidebar.appendChild(rgSide);
 
-            const rGrid = document.createElement('div');
-            rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
-            rGrid.onclick = e => gridClick(e, res.id);
-            grid.appendChild(rGrid);
-            activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
+            const rgGrid = document.createElement('div');
+            rgGrid.className = 'row-group'; rgGrid.style.width = width + 'px';
+            grid.appendChild(rgGrid);
+            currentY += 38;
 
-            renderTasksForId(res.id, rGrid, grid, currentY);
-            currentY += 50;
+            if(!rg.collapsed) {
+                visibleResources.forEach(res => {
+                    const rSide = document.createElement('div');
+                    rSide.className = 'sidebar-monteur sidebar-item';
+                    rSide.innerHTML = `<span style="width:100%; font-weight:600;">${res.name}</span>` + 
+                                      (res.rentedTo ? `<span style="font-size:10px; color:#e65100; font-weight:bold; width:100%; display:block; margin-top:2px;">↳ Verliehen an: ${res.rentedTo}</span>` : '');
+                    rSide.ondblclick = e => { e.stopPropagation(); openEditModal('resource', res); };
+                    rSide.setAttribute('draggable', 'true');
+                    rSide.ondragstart = e => { e.dataTransfer.setData('text', JSON.stringify({ rId: res.id, rgId: rg.id })); setTimeout(() => rSide.style.opacity = '0.5', 0); };
+                    rSide.ondragend = () => { rSide.style.opacity = '1'; };
+                    sidebar.appendChild(rSide);
+
+                    const rGrid = document.createElement('div');
+                    rGrid.className = 'row-monteur'; rGrid.style.width = width + 'px';
+                    rGrid.onclick = e => gridClick(e, res.id);
+                    grid.appendChild(rGrid);
+                    activeRowOffsets.push({ top: currentY, bottom: currentY + 50, mId: res.id });
+
+                    renderTasksForId(res.id, rGrid, grid, currentY, searchTerm, statusFilter);
+                    currentY += 50;
+                });
+            }
         });
     }
 
     updateTodayLine();
     document.getElementById('zoom-info').innerText=`Zoom: ${Math.round(dayWidth)}px`;
+    renderPeopleAdmin();
+    renderTasksAdmin();
+    renderTimeAdmin();
 }
 
-function renderTasksForId(mId, rowEl, grid, yPos) {
-    state.einsaetze.filter(e => e.mId === mId && e.year === currentYear).forEach(e => {
+function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
+    state.einsaetze.filter(e => e.mId === mId && e.year === currentYear)
+    .filter(e => matchesStatusFilter(e, statusFilter) && matchesSearch(getTaskSearchBlob(e), searchTerm))
+    .forEach(e => {
         const bar=document.createElement('div');
-        bar.className='bar' + (e.isVacation ? ' is-vacation' : '') + (e.isRented ? ' is-rented' : '');
+        bar.className='bar' + (isAbsence(e) ? ' is-absence abs-' + e.absenceType : '') + (e.isRented ? ' is-rented' : '');
         bar.style.left=(e.start*dayWidth + 1)+'px';
-        bar.style.top=(yPos)+'px';
+        bar.style.top=(yPos + TASK_BAR_VERTICAL_OFFSET)+'px';
         bar.style.width=(e.duration*dayWidth - 2)+'px';
         if(!e.isRented) bar.style.backgroundColor = e.color || '#4285f4';
         
-        bar.innerHTML=`<div class="bar-content"><strong>${e.title}</strong></div><div class="resizer"></div>`;
+        const linkedLabel = getLinkedTaskLabel(e.linkedTaskId);
+        bar.innerHTML=`<div class="bar-content"><strong>${e.title}${linkedLabel}</strong></div><div class="resizer"></div>`;
         bar.addEventListener('dblclick', (ev) => { ev.stopPropagation(); openEditModal('einsatz', e); });
         bar.querySelector('.resizer').onmousedown=ev=>initResize(ev,e,bar);
         bar.onmousedown = ev => { if(!ev.target.classList.contains('resizer')) initMove(ev,e,bar); };
@@ -406,9 +872,11 @@ function renderTasksForId(mId, rowEl, grid, yPos) {
     });
 }
 
-function addCell(row,span,text,isToday=false){
-    const div=document.createElement('div'); div.className='header-cell'+(isToday?' is-today':'');
-    div.style.width=(span*dayWidth)+'px'; div.innerText=text; row.appendChild(div);
+function addCell(row,span,text,isToday=false,isHoliday=false,holidayTitle=''){
+    const div=document.createElement('div'); div.className='header-cell'+(isToday?' is-today':'')+(isHoliday?' is-holiday':'');
+    div.style.width=(span*dayWidth)+'px'; div.innerText=text;
+    if(holidayTitle) div.title = holidayTitle;
+    row.appendChild(div);
 }
 
 function initMove(ev, item, bar) {
@@ -437,15 +905,53 @@ function initMove(ev, item, bar) {
         const targetRow = activeRowOffsets.find(r => centerY >= r.top && centerY <= r.bottom);
         if(targetRow) newMId = targetRow.mId;
 
-        let pCheck = isPlacementValid(newMId, newStart, item.duration);
+        let pCheck = validatePlacement(newMId, newStart, item.duration, e.ctrlKey ? null : item.id);
         if(!pCheck.valid) { alert(pCheck.msg); render(); return; }
 
-        // Sanitize visual flags when jumping between Humans and Machines
-        let isHuman = getMonteur(newMId) !== null;
-        if(isHuman) item.isRented = false; else item.isVacation = false;
+        const sourceIsHuman = getMonteur(originalMId) !== null;
+        const sourceIsResource = getResource(originalMId) !== null;
+        const targetIsHuman = getMonteur(newMId) !== null;
+        const targetIsResource = getResource(newMId) !== null;
 
-        if (e.ctrlKey) { state.einsaetze.push({ ...item, id: 'e' + Date.now(), start: newStart, mId: newMId }); } 
-        else { item.start = newStart; item.mId = newMId; }
+        if(e.ctrlKey && sourceIsHuman && targetIsResource) {
+            const clonedItem = {
+                id: 'e' + Date.now(),
+                mId: newMId,
+                year: currentYear,
+                title: item.title,
+                start: item.start,
+                duration: item.duration,
+                color: item.color || '#4285f4',
+                absenceType: 'none',
+                isRented: false,
+                linkedTaskId: item.id
+            };
+            if(!applyLinkedTaskToResourceItem(clonedItem, item.id)) { alert('Verknüpfung fehlgeschlagen: Zielressource ist in dem Zeitraum belegt.'); render(); return; }
+            state.einsaetze.push(clonedItem);
+            saveState(); render();
+            return;
+        }
+
+        if(!e.ctrlKey && sourceIsResource && targetIsHuman) {
+            const linked = state.einsaetze.find(x => x.id !== item.id && x.mId === newMId && x.year === currentYear && rangesOverlap(newStart, item.duration, x.start, x.duration));
+            if(!linked) { alert('Keine passende Mitarbeiter-Aufgabe unter dem Mausziel gefunden.'); render(); return; }
+            if(!applyLinkedTaskToResourceItem(item, linked.id)) { alert('Verknüpfung fehlgeschlagen: Zielressource ist in dem Zeitraum belegt.'); render(); return; }
+            saveState(); render();
+            return;
+        }
+
+        // Sanitize visual flags when jumping between Humans and Machines
+        if(targetIsHuman) item.isRented = false; else item.absenceType = 'none';
+
+        if (e.ctrlKey) {
+            const clonedItem = { ...item, id: 'e' + Date.now(), start: newStart, mId: newMId, linkedTaskId: null };
+            sanitizeLinkedTask(clonedItem);
+            state.einsaetze.push(clonedItem);
+        } else {
+            item.start = newStart;
+            item.mId = newMId;
+            sanitizeLinkedTask(item);
+        }
         saveState(); render(); 
     };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -456,11 +962,14 @@ function initResize(ev,item,bar){
     const move=e=>{ item.duration=Math.max(1,startD+Math.round((e.clientX-startX)/dayWidth)); bar.style.width=(item.duration*dayWidth-2)+'px'; };
     const up=()=>{ 
         window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); 
-        let pCheck = isPlacementValid(item.mId, item.start, item.duration);
+        let pCheck = validatePlacement(item.mId, item.start, item.duration, item.id);
         if(!pCheck.valid) { alert(pCheck.msg); item.duration = startD; }
-        else if(item.isVacation) {
+        else {
+            sanitizeLinkedTask(item);
+            if(item.absenceType === 'urlaub') {
             let vCheck = checkVacationLimit(item.mId, item.id, item.duration);
             if(!vCheck.valid) { alert(vCheck.msg); item.duration = startD; }
+            }
         }
         saveState(); render(); 
     };
@@ -490,26 +999,56 @@ function scrollToToday(){
 
 function openEditModal(type, item, gId = null) {
     editContext = { type, id: item.id, gId };
-    document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
+    document.getElementById('modalTitle').innerText = (type==='einsatz'?'Eintrag':type==='group'?'Team':type==='resourceGroup'?'Gerätegruppe':type==='resource'?'Gerät':'Mitarbeiter') + ' bearbeiten';
     document.getElementById('labelTitle').innerText = type === 'resource' ? 'Maschinen-Name' : 'Bezeichnung / Name';
     document.getElementById('fieldTitle').value = item.name || item.title || '';
     
     document.getElementById('einsatzFields').style.display = type === 'einsatz' ? 'block' : 'none';
     document.getElementById('monteurFields').style.display = type === 'monteur' ? 'block' : 'none';
     document.getElementById('resourceFields').style.display = type === 'resource' ? 'block' : 'none';
+    if(type !== 'einsatz') { document.getElementById('wrapLinkedTask').style.display = 'none'; document.getElementById('wrapAbsence').style.display = 'none'; }
     
     if(type==='einsatz'){
         document.getElementById('fieldDuration').value = item.duration;
         document.getElementById('fieldColor').value = item.color;
         
         let isHuman = getMonteur(item.mId) !== null;
-        document.getElementById('wrapVacation').style.display = isHuman ? 'flex' : 'none';
-        document.getElementById('wrapRented').style.display = isHuman ? 'none' : 'flex';
-        
-        document.getElementById('fieldIsVacation').checked = item.isVacation || false;
-        document.getElementById('fieldIsRentedTimeline').checked = item.isRented || false;
+        const isResource = getResource(item.mId) !== null;
+        document.getElementById('wrapAbsence').style.display = isHuman ? 'flex' : 'none';
+        document.getElementById('wrapLinkedTask').style.display = isResource ? 'flex' : 'none';
+
+        const linkedSelect = document.getElementById('fieldLinkedTask');
+        linkedSelect.innerHTML = '<option value="">-- Keine Zuordnung --</option>';
+        if(isResource) {
+            getLinkableTasksForResourceEinsatz(item).forEach(linked => {
+                const monteur = getMonteur(linked.mId);
+                const option = document.createElement('option');
+                option.value = linked.id;
+                option.textContent = `${monteur ? monteur.name : 'Mitarbeiter'} · ${linked.title}`;
+                linkedSelect.appendChild(option);
+            });
+        }
+
+        document.getElementById('fieldAbsenceType').value = item.absenceType || 'none';
+        linkedSelect.value = item.linkedTaskId || '';
+        linkedSelect.onchange = () => {
+            const selectedId = linkedSelect.value || null;
+            if(!selectedId) return;
+            const preview = { ...item, mId: item.mId, id: item.id };
+            if(!applyLinkedTaskToResourceItem(preview, selectedId)) {
+                alert('Verknüpfung nicht möglich: Ressource ist in dem Zeitraum bereits belegt.');
+                linkedSelect.value = item.linkedTaskId || '';
+                return;
+            }
+            document.getElementById('fieldTitle').value = preview.title;
+            document.getElementById('fieldColor').value = preview.color || '#4285f4';
+            document.getElementById('fieldDuration').value = preview.duration;
+        };
     } else if(type==='monteur'){
         document.getElementById('fieldVacation').value = item.vacationDays !== undefined ? item.vacationDays : 30;
+        document.getElementById('fieldWorkStart').value = item.workStart || '07:00';
+        document.getElementById('fieldWorkEnd').value = item.workEnd || '15:30';
+        document.getElementById('fieldDefaultBreak').value = item.defaultBreak !== undefined ? item.defaultBreak : 30;
         document.getElementById('fieldEmpStart').value = item.empStart || '';
         document.getElementById('fieldEmpEnd').value = item.empEnd || '';
     } else if(type==='resource') {
@@ -526,20 +1065,28 @@ function saveModal() {
     if(editContext.type==='einsatz'){
         const e = state.einsaetze.find(x=>x.id===editContext.id);
         const dur = parseInt(document.getElementById('fieldDuration').value) || 1;
-        const isVac = document.getElementById('fieldIsVacation').checked;
-        const isRented = document.getElementById('fieldIsRentedTimeline').checked;
+        const absenceType = document.getElementById('fieldAbsenceType').value || 'none';
         
-        let pCheck = isPlacementValid(e.mId, e.start, dur);
+        let pCheck = validatePlacement(e.mId, e.start, dur, e.id);
         if(!pCheck.valid) return alert(pCheck.msg);
         
-        if(isVac) {
+        if(absenceType === 'urlaub') {
             let vCheck = checkVacationLimit(e.mId, e.id, dur);
             if(!vCheck.valid) return alert(vCheck.msg);
         }
 
-        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.isVacation=isVac; e.isRented=isRented;
+        const linkedTaskId = document.getElementById('fieldLinkedTask').value || null;
+        e.title=val; e.duration=dur; e.color=document.getElementById('fieldColor').value; e.absenceType=absenceType; e.isRented=false;
+        if(getResource(e.mId) && linkedTaskId) {
+            if(!applyLinkedTaskToResourceItem(e, linkedTaskId)) return alert('Verknüpfung nicht möglich: Ressource ist in dem Zeitraum bereits belegt.');
+        } else {
+            e.linkedTaskId = null;
+        }
+        sanitizeLinkedTask(e);
     } else if(editContext.type==='group'){
         state.groups.find(x=>x.id===editContext.id).name=val;
+    } else if(editContext.type==='resourceGroup'){
+        state.resourceGroups.find(x=>x.id===editContext.id).name=val;
     } else if(editContext.type==='resource'){
         const r = state.resources.find(x=>x.id===editContext.id);
         r.name=val;
@@ -548,6 +1095,9 @@ function saveModal() {
         const m = state.groups.find(x=>x.id===editContext.gId).monteure.find(x=>x.id===editContext.id);
         m.name=val; 
         m.vacationDays = parseInt(document.getElementById('fieldVacation').value) || 0;
+        m.workStart = document.getElementById('fieldWorkStart').value || '07:00';
+        m.workEnd = document.getElementById('fieldWorkEnd').value || '15:30';
+        m.defaultBreak = parseInt(document.getElementById('fieldDefaultBreak').value) || 0;
         m.empStart = document.getElementById('fieldEmpStart').value;
         m.empEnd = document.getElementById('fieldEmpEnd').value;
     }
@@ -558,6 +1108,12 @@ function deleteCurrentItem() {
     if(!confirm("Wirklich löschen?")) return;
     if(editContext.type==='einsatz') state.einsaetze=state.einsaetze.filter(x=>x.id!==editContext.id);
     else if(editContext.type==='group') state.groups=state.groups.filter(x=>x.id!==editContext.id);
+    else if(editContext.type==='resourceGroup') {
+        const fallback = state.resourceGroups.find(x=>x.id!==editContext.id);
+        if(!fallback) return alert('Mindestens eine Gerätegruppe muss bestehen bleiben.');
+        state.resources.forEach(r => { if(r.groupId===editContext.id) r.groupId = fallback.id; });
+        state.resourceGroups=state.resourceGroups.filter(x=>x.id!==editContext.id);
+    }
     else if(editContext.type==='resource') state.resources=state.resources.filter(x=>x.id!==editContext.id);
     else state.groups.find(x=>x.id===editContext.gId).monteure=state.groups.find(x=>x.id===editContext.gId).monteure.filter(x=>x.id!==editContext.id);
     saveState(); closeModal(); render();
@@ -567,18 +1123,38 @@ function gridClick(ev,mId){
     if(ev.target!==ev.currentTarget)return; 
     const rect=ev.currentTarget.getBoundingClientRect(); 
     const start=Math.floor((ev.clientX-rect.left)/dayWidth); 
-    
-    let pCheck = isPlacementValid(mId, start, 1);
+
+    if(getMonteur(mId) && timeEntryMode) {
+        openWorkTimeContextMenu(ev, mId, start);
+        return;
+    }
+
+    let pCheck = validatePlacement(mId, start, 1);
     if(!pCheck.valid) { alert("Aktion blockiert: " + pCheck.msg); return; }
 
-    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', isVacation: false, isRented: false }; 
+    const newItem = { id:'e'+Date.now(), mId, year:currentYear, title:'Neu...', start, duration:1, color:'#4285f4', absenceType: 'none', isRented: false, linkedTaskId: null }; 
     state.einsaetze.push(newItem); saveState(); render(); openEditModal('einsatz', newItem); 
 }
 
+function toggleTimeEntryMode(){
+    timeEntryMode = !timeEntryMode;
+    const btn = document.getElementById('time-mode-btn');
+    if(btn){
+        btn.innerText = `⏱ Zeitmodus: ${timeEntryMode ? 'AN' : 'AUS'}`;
+        btn.classList.toggle('btn-primary', timeEntryMode);
+    }
+}
+
 function addTeam(){ const n=prompt("Team Name:"); if(n) { state.groups.push({id:'g'+Date.now(),name:n,collapsed:false,monteure:[]}); saveState(); render(); } }
-function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, empStart:'', empEnd:''}); saveState(); render(); } }
-function addResource(){ const n=prompt("Maschinen- / Gerätename:"); if(n) { state.resources.push({id:'r'+Date.now(),name:n, rentedTo:''}); saveState(); render(); } }
+function addMonteur(ev,gId){ ev.stopPropagation(); const n=prompt("Name:"); if(n) { state.groups.find(g => g.id === gId).monteure.push({id:'m'+Date.now(),name:n, vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart:'', empEnd:''}); saveState(); render(); } }
+function addResource(ev,rgId){ if(ev) ev.stopPropagation(); const n=prompt("Maschinen- / Gerätename:"); if(n) { const groupId = rgId || (state.resourceGroups[0] && state.resourceGroups[0].id) || 'rg'+Date.now(); if(!state.resourceGroups.find(x=>x.id===groupId)) state.resourceGroups.push({id:groupId,name:'Neue Gerätegruppe',collapsed:false}); state.resources.push({id:'r'+Date.now(),groupId,name:n, rentedTo:''}); saveState(); render(); } }
+function addResourceGroup(){ const n=prompt("Gerätegruppen-Name:"); if(n) { state.resourceGroups.push({id:'rg'+Date.now(),name:n,collapsed:false}); saveState(); render(); } }
 function getWeek(d){ let date=new Date(d.getTime()); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-(date.getDay()+6)%7); let w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+(w1.getDay()+6)%7)/7); }
+
+
+document.addEventListener('click', e => { if(!document.getElementById('worktimeMenu').contains(e.target)) closeWorkTimeContextMenu(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeWorkTimeContextMenu(); });
+window.addEventListener('scroll', closeWorkTimeContextMenu, true);
 
 updateYearBase(); render(); setTimeout(scrollToToday, 200);
 </script>
