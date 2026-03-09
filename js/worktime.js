@@ -71,15 +71,29 @@ function applyWorktimePreset(type) {
     }
 }
 
+function getPlannedProjectNoteForDay(mId, dayIdx) {
+    const planned = state.einsaetze
+        .filter(e => e.year === currentYear && e.mId === mId && rangesOverlap(dayIdx, 1, e.start, e.duration))
+        .filter(e => !e.absenceType || e.absenceType === 'none')
+        .map(e => e.title)
+        .filter(Boolean);
+    if(planned.length === 0) return '';
+    return planned.join(' | ');
+}
+
 function openWorkTimeContextMenu(ev, mId, dayIdx) {
     ev.preventDefault();
     ev.stopPropagation();
     const menu = document.getElementById('worktimeMenu');
     const key = getWorkHoursKey(mId, dayIdx);
     let current = state.workHours[key] || null;
+    const plannedNote = getPlannedProjectNoteForDay(mId, dayIdx);
     if(!current) {
         const model = getMonteurTimePreset(mId);
-        current = getPreviousWorkRecord(mId, dayIdx) || { from:model.from, to:model.to, breakMin:model.breakMin, hours:0, note:'' };
+        const previous = getPreviousWorkRecord(mId, dayIdx);
+        current = previous ? { ...previous, note: plannedNote || (previous.note || '') } : { from:model.from, to:model.to, breakMin:model.breakMin, hours:0, note: plannedNote || '' };
+    } else if((!current.note || !current.note.trim()) && plannedNote) {
+        current = { ...current, note: plannedNote };
     }
 
     workTimeContext = { mId, dayIdx };
