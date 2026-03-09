@@ -336,6 +336,7 @@ let startDate = new Date(currentYear, 0, 1);
 const today = new Date();
 let activeRowOffsets = []; 
 let editContext = { type: null, id: null, gId: null };
+const TASK_BAR_VERTICAL_OFFSET = 14;
 let workTimeContext = { mId: null, dayIdx: null };
 let timeEntryMode = false;
 
@@ -836,7 +837,7 @@ function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter 
         const bar=document.createElement('div');
         bar.className='bar' + (isAbsence(e) ? ' is-absence abs-' + e.absenceType : '') + (e.isRented ? ' is-rented' : '');
         bar.style.left=(e.start*dayWidth + 1)+'px';
-        bar.style.top=(yPos)+'px';
+        bar.style.top=(yPos + TASK_BAR_VERTICAL_OFFSET)+'px';
         bar.style.width=(e.duration*dayWidth - 2)+'px';
         if(!e.isRented) bar.style.backgroundColor = e.color || '#4285f4';
         
