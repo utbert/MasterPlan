@@ -42,12 +42,19 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
 .app-container{ display:flex; height:100%; min-height:0; overflow:hidden; }
 #view-dispo.view-page.active{ display:flex; flex-direction:column; }
 #view-dispo .app-container{ flex:1; min-height:0; }
-.unplanned-tray{ border-top:1px solid var(--border); background:#f8fafc; padding:10px 12px; height:124px; display:flex; flex-direction:column; gap:8px; }
-.unplanned-head{ display:flex; justify-content:space-between; align-items:center; }
-.unplanned-list{ display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
-.unplanned-card{ min-width:210px; border:1px dashed #9aa0a6; background:#fff; border-radius:10px; padding:8px; font-size:12px; cursor:grab; }
+.unplanned-tray{ border-left:1px solid var(--border); background:#f8fafc; padding:10px 10px; width:320px; display:flex; flex-direction:column; gap:8px; transition:width 0.2s ease, padding 0.2s ease; }
+.unplanned-tray.collapsed{ width:46px; padding:10px 6px; }
+.unplanned-head{ display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.unplanned-title{ font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.unplanned-tray.collapsed .unplanned-title{ display:none; }
+.unplanned-list{ display:flex; flex-direction:column; gap:8px; overflow:auto; padding-right:2px; }
+.unplanned-tray.collapsed .unplanned-list{ display:none; }
+.unplanned-card{ border:1px dashed #9aa0a6; background:#fff; border-radius:10px; padding:8px; font-size:12px; cursor:grab; }
 .unplanned-card:active{ cursor:grabbing; }
 .unplanned-card .meta{ color:#5f6368; font-size:11px; margin-top:4px; }
+.unplanned-actions{ display:flex; gap:6px; }
+.unplanned-tray.collapsed .unplanned-actions{ display:none; }
+.unplanned-toggle{ min-width:30px; padding:4px 6px; }
 
 /* Sidebar */
 .sidebar{ width:var(--name-width); flex-shrink:0; border-right:2px solid #ccc; display:flex; flex-direction:column; z-index:500; background:#fff; }
@@ -172,8 +179,11 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
     </div>
     <div id="unplannedTray" class="unplanned-tray">
         <div class="unplanned-head">
-            <strong>🅿️ Ungeplante Aufträge</strong>
-            <button class="btn" onclick="addUnplannedOrder()">+ Auftrag parken</button>
+            <span class="unplanned-title">🅿️ Ungeplante Aufträge</span>
+            <div class="unplanned-actions">
+                <button class="btn" onclick="addUnplannedOrder()">+ Auftrag</button>
+            </div>
+            <button id="unplannedToggleBtn" class="btn unplanned-toggle" onclick="toggleUnplannedTray()" title="Parkleiste ein-/ausklappen">⮜</button>
         </div>
         <div id="unplannedList" class="unplanned-list"></div>
     </div>
@@ -359,6 +369,7 @@ let editContext = { type: null, id: null, gId: null };
 const TASK_BAR_VERTICAL_OFFSET = 18;
 let workTimeContext = { mId: null, dayIdx: null };
 let timeEntryMode = false;
+let unplannedTrayCollapsed = false;
 
 let state = JSON.parse(localStorage.getItem('masterPlanState')) || {
     groups:[{id:'g1',name:'Team Elektro',collapsed:false,monteure:[{id:'m1',name:'Schmidt, Thomas', vacationDays: 30, workStart:'07:00', workEnd:'15:30', defaultBreak:30, empStart: '', empEnd: ''}]}],
@@ -887,6 +898,7 @@ function render(){
     renderTasksAdmin();
     renderTimeAdmin();
     renderUnplannedTray();
+    applyUnplannedTrayState();
 }
 
 function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter = 'all') {
@@ -1158,6 +1170,19 @@ function deleteCurrentItem() {
     saveState(); closeModal(); render();
 }
 
+
+function toggleUnplannedTray(){
+    unplannedTrayCollapsed = !unplannedTrayCollapsed;
+    applyUnplannedTrayState();
+}
+
+function applyUnplannedTrayState(){
+    const tray = document.getElementById('unplannedTray');
+    const btn = document.getElementById('unplannedToggleBtn');
+    if(!tray || !btn) return;
+    tray.classList.toggle('collapsed', unplannedTrayCollapsed);
+    btn.textContent = unplannedTrayCollapsed ? '⮞' : '⮜';
+}
 
 function addUnplannedOrder(){
     const title = prompt('Auftragstitel für Parkzone:');
