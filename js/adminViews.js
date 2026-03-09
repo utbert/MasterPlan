@@ -24,7 +24,7 @@ function renderPeopleAdmin() {
                     <button class="btn btn-primary" onclick="addMonteur(event,'${g.id}')">+ Mitarbeiter</button>
                 </span>
             </div>
-            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
+            <ul style="margin:8px 0 0 16px;">${g.monteure.map(m=>`<li>${m.name}${m.isSubcontractor ? ' <em style="color:#e65100;">(Subunternehmer)</em>' : ''} <button class='btn' onclick="openEditModal('monteur', state.groups.find(x=>x.id==='${g.id}').monteure.find(y=>y.id==='${m.id}'),'${g.id}')">Bearbeiten</button></li>`).join('')}</ul>
         </div>
     `).join('');
 
@@ -108,6 +108,7 @@ function renderTimeAdmin() {
 
     const allMonteurs = state.groups.flatMap(g => g.monteure);
     const vacationStats = allMonteurs
+                .filter(m => !m.isSubcontractor)
         .filter(m => employeeFilter === 'all' || m.id === employeeFilter)
         .map(m => {
             const planned = state.einsaetze
