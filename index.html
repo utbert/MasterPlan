@@ -847,7 +847,6 @@ function renderTasksForId(mId, rowEl, grid, yPos, searchTerm = '', statusFilter 
         bar.querySelector('.resizer').onmousedown=ev=>initResize(ev,e,bar);
         bar.onmousedown = ev => { if(!ev.target.classList.contains('resizer')) initMove(ev,e,bar); };
         grid.appendChild(bar);
-        if(typeof state.workHours[key] === 'object' && state.workHours[key] && state.workHours[key].note === undefined) state.workHours[key].note='';
     });
 }
 
