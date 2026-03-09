@@ -241,6 +241,59 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
         <div id="time-admin-list"></div>
     </div>
 </div>
+</div>
+
+<div id="view-people" class="view-page admin-page">
+    <div class="admin-grid">
+        <div class="admin-card">
+            <h3>Mitarbeiter & Teams</h3>
+            <div class="admin-actions"><button class="btn btn-primary" onclick="addTeam()">+ Team</button></div>
+            <div id="people-admin-list"></div>
+        </div>
+        <div class="admin-card">
+            <h3>Ressourcen & Gruppen</h3>
+            <div class="admin-actions"><button class="btn btn-warning" onclick="addResourceGroup()">+ Gerätegruppe</button></div>
+            <div id="resource-admin-list"></div>
+        </div>
+    </div>
+    <div class="admin-card" style="margin-top:16px;">
+        <h3>Daten (JSON)</h3>
+        <div class="admin-actions">
+            <button class="btn" onclick="refreshStateJson()">Aktualisieren</button>
+            <button class="btn" onclick="applyStateJson()">JSON anwenden</button>
+        </div>
+        <textarea id="state-json" style="width:100%; min-height:180px; font-family:monospace;"></textarea>
+    </div>
+</div>
+
+<div id="view-tasks" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Aufgabenübersicht (Jahr <span id="tasks-year-label"></span>)</h3>
+        <div id="tasks-admin-list"></div>
+    </div>
+</div>
+
+<div id="view-time" class="view-page admin-page">
+    <div class="admin-card">
+        <h3>Zeiterfassung (Von/Bis/Pause)</h3>
+        <div class="admin-actions">
+            <label for="time-month-filter" style="font-size:12px; color:#555;">Monat:</label>
+            <select id="time-month-filter" onchange="renderTimeAdmin()">
+                <option value="all">Ganzes Jahr</option>
+                <option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option>
+                <option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
+            </select>
+            <label for="time-employee-filter" style="font-size:12px; color:#555;">Mitarbeiter:</label>
+            <select id="time-employee-filter" onchange="renderTimeAdmin()">
+                <option value="all">Alle Mitarbeiter</option>
+            </select>
+            <button class="btn" onclick="exportTimeCsv()">CSV Export</button>
+        </div>
+        <div id="time-admin-summary"></div>
+        <div id="time-admin-list"></div>
+    </div>
+</div>
 
 <div id="universalModal" class="modal-overlay">
     <div class="modal">
