@@ -64,15 +64,25 @@ function renderTimeAdmin() {
     const el = document.getElementById('time-admin-list');
     const summaryEl = document.getElementById('time-admin-summary');
     const monthFilterEl = document.getElementById('time-month-filter');
+    const employeeFilterEl = document.getElementById('time-employee-filter');
     if(!el || !summaryEl) return;
 
+    if(employeeFilterEl) {
+        const prev = employeeFilterEl.value || 'all';
+        const allMonteurs = state.groups.flatMap(g => g.monteure).sort((a,b)=>a.name.localeCompare(b.name, 'de'));
+        employeeFilterEl.innerHTML = `<option value="all">Alle Mitarbeiter</option>` + allMonteurs.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        employeeFilterEl.value = allMonteurs.some(m => m.id === prev) ? prev : 'all';
+    }
+
     const monthFilter = monthFilterEl ? monthFilterEl.value : 'all';
+    const employeeFilter = employeeFilterEl ? employeeFilterEl.value : 'all';
     const rows = Object.entries(state.workHours).map(([key, rec]) => {
         const [year,mId,dayIdx] = key.split('-');
         const yyyy = parseInt(year);
         const day = new Date(yyyy,0,1); day.setDate(day.getDate()+parseInt(dayIdx));
         if(yyyy !== currentYear) return null;
         if(monthFilter !== 'all' && (day.getMonth()+1) !== parseInt(monthFilter,10)) return null;
+        if(employeeFilter !== 'all' && mId !== employeeFilter) return null;
 
         const m = getMonteur(mId);
         const from = rec.from || '--:--';
@@ -80,8 +90,8 @@ function renderTimeAdmin() {
         const pause = rec.breakMin || 0;
         const hours = rec.hours || 0;
         const note = rec.note || '';
-        const overtime = Math.round((hours - 8) * 100) / 100;
-        return { year:yyyy, name:m?m.name:mId, dateObj:day, date:day.toLocaleDateString('de-DE'), from, to, pause, hours, overtime, note };
+        const overtime = (rec.overtime !== undefined && rec.overtime !== null) ? rec.overtime : Math.round((hours - 8) * 100) / 100;
+        return { year:yyyy, mId, name:m?m.name:mId, dateObj:day, date:day.toLocaleDateString('de-DE'), from, to, pause, hours, overtime, note };
     }).filter(Boolean).sort((a,b)=> a.dateObj - b.dateObj || a.name.localeCompare(b.name));
 
     const totalsByEmployee = {};
@@ -113,13 +123,16 @@ function renderTimeAdmin() {
 
 function exportTimeCsv() {
     const monthFilterEl = document.getElementById('time-month-filter');
+    const employeeFilterEl = document.getElementById('time-employee-filter');
     const monthFilter = monthFilterEl ? monthFilterEl.value : 'all';
+    const employeeFilter = employeeFilterEl ? employeeFilterEl.value : 'all';
     const rows = Object.entries(state.workHours).map(([key, rec]) => {
         const [year,mId,dayIdx] = key.split('-');
         const yyyy = parseInt(year);
         const day = new Date(yyyy,0,1); day.setDate(day.getDate()+parseInt(dayIdx));
         if(yyyy !== currentYear) return null;
         if(monthFilter !== 'all' && (day.getMonth()+1) !== parseInt(monthFilter,10)) return null;
+        if(employeeFilter !== 'all' && mId !== employeeFilter) return null;
         const m = getMonteur(mId);
         return {
             mitarbeiter: m ? m.name : mId,

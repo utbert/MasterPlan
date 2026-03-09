@@ -38,6 +38,13 @@ function shiftTimeMinutes(timeStr, deltaMinutes) {
     return `${h}:${m}`;
 }
 
+function getExpectedDailyHours(mId) {
+    if(typeof getExpectedDailyHoursForMonteur === 'function') return getExpectedDailyHoursForMonteur(mId);
+    const preset = getMonteurTimePreset(mId);
+    const modeled = calcHoursFromRange(preset.from, preset.to, preset.breakMin);
+    return modeled === null ? 8 : modeled;
+}
+
 function getPreviousWorkRecord(mId, dayIdx) {
     for(let d=dayIdx-1; d>=0; d--) {
         const prev = state.workHours[getWorkHoursKey(mId, d)];
@@ -99,8 +106,11 @@ function saveWorkTimeFromMenu() {
     const hours = calcHoursFromRange(from, to, breakMin);
     if(hours === null) return alert('Bitte gültige Von/Bis-Zeit eingeben (Bis muss nach Von liegen).');
 
+    const expectedHours = getExpectedDailyHours(workTimeContext.mId);
+    const overtime = Math.round((hours - expectedHours) * 100) / 100;
+
     const key = getWorkHoursKey(workTimeContext.mId, workTimeContext.dayIdx);
-    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours, note };
+    state.workHours[key] = { from, to, breakMin: Math.max(0, breakMin), hours, overtime, note };
     saveState();
     closeWorkTimeContextMenu();
     render();

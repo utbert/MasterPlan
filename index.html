@@ -206,6 +206,10 @@ body{ font-family:'Segoe UI',sans-serif; margin:0; display:flex; flex-direction:
                 <option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option>
                 <option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option>
             </select>
+            <label for="time-employee-filter" style="font-size:12px; color:#555;">Mitarbeiter:</label>
+            <select id="time-employee-filter" onchange="renderTimeAdmin()">
+                <option value="all">Alle Mitarbeiter</option>
+            </select>
             <button class="btn" onclick="exportTimeCsv()">CSV Export</button>
         </div>
         <div id="time-admin-summary"></div>
@@ -371,7 +375,16 @@ function normalizeState() {
             const num = parseFloat(val.replace(',', '.'));
             state.workHours[key] = Number.isNaN(num) ? { from:'', to:'', breakMin:0, hours:0, note:'' } : { from:'', to:'', breakMin:0, hours:num, note:'' };
         }
-        if(typeof state.workHours[key] === 'object' && state.workHours[key] && state.workHours[key].note === undefined) state.workHours[key].note='';
+        if(typeof state.workHours[key] === 'object' && state.workHours[key]) {
+            if(state.workHours[key].note === undefined) state.workHours[key].note='';
+            if(state.workHours[key].overtime === undefined) {
+                const parts = key.split('-');
+                const mId = parts.length > 2 ? parts[1] : null;
+                const expected = mId ? getExpectedDailyHoursForMonteur(mId) : 8;
+                const hrs = Number(state.workHours[key].hours || 0);
+                state.workHours[key].overtime = Math.round((hrs - expected) * 100) / 100;
+            }
+        }
     });
 }
 
@@ -396,6 +409,15 @@ function getMonteur(mId) {
         if(m) return m;
     }
     return null;
+}
+
+function getExpectedDailyHoursForMonteur(mId) {
+    const m = getMonteur(mId);
+    const from = (m && m.workStart) ? m.workStart : '07:00';
+    const to = (m && m.workEnd) ? m.workEnd : '15:30';
+    const breakMin = (m && m.defaultBreak !== undefined && m.defaultBreak !== null) ? parseInt(m.defaultBreak, 10) : 30;
+    const modeled = (typeof calcHoursFromRange === 'function') ? calcHoursFromRange(from, to, breakMin) : null;
+    return modeled === null ? 8 : modeled;
 }
 
 function getResource(rId) {
